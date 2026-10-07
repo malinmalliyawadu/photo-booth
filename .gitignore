@@ -1,0 +1,24 @@
+node_modules
+.pnpm-store
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Next.js
+.next
+out
+next-env.d.ts
+
+# Runtime data: originals, composites, uploaded templates. Backed up by
+# hand on the night (see the checklist), never by git.
+/data
+
+# Certificates issued by ops/ca.sh. The private keys never leave the
+# controller; the CA certificate is what the iPad installs.
+/ops/certs
+
+# Playwright
+/e2e/test-results
+/e2e/playwright-report

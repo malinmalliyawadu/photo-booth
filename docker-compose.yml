@@ -1,0 +1,17 @@
+# Local development backing services only. The app and the worker run
+# with `pnpm dev`. On the controller the same Postgres runs from this
+# file under systemd (phase 6).
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: booth
+      POSTGRES_PASSWORD: booth
+      POSTGRES_DB: booth
+    ports:
+      - "5436:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

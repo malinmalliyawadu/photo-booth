@@ -1,0 +1,30 @@
+{
+  "name": "photo-booth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.18.0",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "dev": "concurrently -n booth,worker -c blue,magenta \"pnpm --filter @booth/booth dev\" \"pnpm --filter @booth/worker dev\"",
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "db:generate": "pnpm --filter @booth/db generate",
+    "db:migrate": "pnpm --filter @booth/db migrate",
+    "db:seed": "pnpm --filter @booth/db seed",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "assets": "tsx scripts/make-sample-assets.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "concurrently": "^9.2.1",
+    "sharp": "^0.35.3",
+    "tsx": "^4.23.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

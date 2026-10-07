@@ -1,0 +1,230 @@
+@import "tailwindcss";
+
+/*
+ * Design language: a darkened room with one warm lamp.
+ *
+ * The booth lives in a dim venue, so every screen is night-dark with
+ * cream type and a single ember accent for the thing to tap. Fraunces
+ * for the words a guest reads at a glance, Figtree for everything else,
+ * Plex Mono for IDs and counts. One theme, no light mode: the admin page
+ * is read on a phone in the same room.
+ */
+
+@theme {
+  --color-*: initial;
+
+  /* Surfaces */
+  --color-night: #0f1113;
+  --color-night-raised: #181b1f;
+  --color-night-lifted: #22262c;
+  --color-night-edge: #2e333a;
+
+  /* Type */
+  --color-cream: #f3ede2;
+  --color-cream-soft: #b7b0a3;
+  --color-cream-faint: #7d776c;
+
+  /* The one warm thing in the room */
+  --color-ember: #e8743b;
+  --color-ember-bright: #f59a6a;
+  --color-ember-deep: #b5521f;
+  --color-ember-tint: #3a2419;
+
+  /* Semantics */
+  --color-mint: #8fd3b0;
+  --color-mint-tint: #1d3328;
+  --color-rose: #e07a85;
+  --color-rose-tint: #3b1f23;
+  --color-gold: #e3c179;
+  --color-gold-tint: #3a311b;
+
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-figtree);
+  --font-mono: var(--font-plex-mono);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+
+  --animate-rise: rise 700ms var(--ease-out-expo) both;
+  --animate-flash: flash 650ms ease-out both;
+  --animate-pulse-soft: pulse-soft 2.4s ease-in-out infinite;
+  --animate-tick: tick 1s var(--ease-out-expo) both;
+  --animate-drift: drift 40s linear infinite;
+  --animate-breathe: breathe 6s ease-in-out infinite;
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes flash {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+  }
+  @keyframes tick {
+    0% { opacity: 0; transform: scale(1.35); }
+    30% { opacity: 1; transform: scale(1); }
+    100% { opacity: 1; transform: scale(0.96); }
+  }
+  @keyframes drift {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+  }
+}
+
+@layer base {
+  html {
+    background: var(--color-night);
+    color: var(--color-cream);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    min-height: 100dvh;
+    overscroll-behavior: none;
+  }
+  /* The kiosk is a touch surface, not a document. */
+  .kiosk {
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    cursor: default;
+  }
+  button {
+    cursor: pointer;
+    font: inherit;
+  }
+  ::selection {
+    background: var(--color-ember);
+    color: var(--color-night);
+  }
+}
+
+@layer components {
+  .display {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 144, "SOFT" 50, "WONK" 1;
+    letter-spacing: -0.01em;
+  }
+  .display-italic {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-variation-settings: "opsz" 144, "SOFT" 80, "WONK" 1;
+  }
+  .eyebrow {
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-cream-faint);
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The big tap target: a guest taps this with the back of a finger holding a drink. */
+  .tap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    min-height: 5.5rem;
+    padding: 0 3rem;
+    border-radius: 999px;
+    background: var(--color-ember);
+    color: var(--color-night);
+    font-family: var(--font-sans);
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.3), 0 18px 50px -12px rgb(232 116 59 / 0.55);
+    transition: transform 120ms var(--ease-out-expo), background 120ms;
+  }
+  .tap:active { transform: scale(0.97); background: var(--color-ember-bright); }
+  .tap-quiet {
+    background: transparent;
+    color: var(--color-cream-soft);
+    box-shadow: inset 0 0 0 2px var(--color-night-edge);
+  }
+  .tap-quiet:active { background: var(--color-night-lifted); color: var(--color-cream); }
+
+  /* Admin controls, phone-sized */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0 1.1rem;
+    border-radius: 0.75rem;
+    background: var(--color-night-lifted);
+    color: var(--color-cream);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--color-night-edge);
+    transition: background 120ms, transform 120ms;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-primary { background: var(--color-ember); color: var(--color-night); box-shadow: none; }
+  .btn-danger { color: var(--color-rose); }
+  .field {
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0 0.9rem;
+    border-radius: 0.75rem;
+    background: var(--color-night);
+    color: var(--color-cream);
+    box-shadow: inset 0 0 0 1px var(--color-night-edge);
+    font-size: 1rem;
+  }
+  .field:focus { outline: none; box-shadow: inset 0 0 0 2px var(--color-ember); }
+  .file-input {
+    display: block;
+    width: 100%;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--color-cream-soft);
+  }
+  .file-input::file-selector-button {
+    margin-right: 0.75rem;
+    padding: 0.4rem 0.8rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: var(--color-night-lifted);
+    color: var(--color-cream);
+    font: inherit;
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--color-night-edge);
+  }
+  .card {
+    background: var(--color-night-raised);
+    border-radius: 1.25rem;
+    box-shadow: inset 0 0 0 1px var(--color-night-edge);
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .pill-ok { background: var(--color-mint-tint); color: var(--color-mint); }
+  .pill-warn { background: var(--color-gold-tint); color: var(--color-gold); }
+  .pill-error { background: var(--color-rose-tint); color: var(--color-rose); }
+  .pill-off { background: var(--color-night-lifted); color: var(--color-cream-faint); }
+}
