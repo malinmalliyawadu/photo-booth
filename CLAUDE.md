@@ -193,6 +193,16 @@ print size, and the same overlay at screen size. The optional sidecar
 maps slots to shots (`{"shots":[1,1,2,2,3,3]}` is the double strip) and
 lists text fields for the compositor.
 
+The PNGs in `templates/` are placeholders from `scripts/make-sample-assets.ts`,
+which centres each caption in the band under the photos by measuring the
+rendered text, and refuses to write a layout whose caption would come
+within `CAPTION_CLEARANCE` of a slot or the frame. **A changed PNG reaches
+fresh databases only**: the seed never loads a file name twice, and
+replacing a layout in place would redraw the sessions taken with it. An
+existing database takes the new artwork as an admin upload after deleting
+the old layout, which retires it if sessions used it (the README has the
+steps).
+
 **Until phase 2 there is no compositor.** The browser lays the shots
 under the overlay itself (`Composite` in `apps/booth/src/components`)
 using the slot rectangles as percentages, which is what the picker, the
