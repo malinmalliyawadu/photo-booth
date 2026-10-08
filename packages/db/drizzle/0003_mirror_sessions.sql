@@ -1,0 +1,1 @@
+ALTER TABLE "sessions" ADD COLUMN "mirrored" boolean DEFAULT false NOT NULL;

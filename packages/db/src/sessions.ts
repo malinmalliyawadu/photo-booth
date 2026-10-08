@@ -39,6 +39,7 @@ export function rowToState(row: SessionRow): SessionState {
     print: row.print,
     reason: row.reason,
     filter: row.filter,
+    mirrored: row.mirrored,
   };
 }
 
@@ -52,6 +53,7 @@ function stateToColumns(state: SessionState) {
     print: state.print,
     reason: state.reason,
     filter: state.filter,
+    mirrored: state.mirrored,
     updatedAt: new Date(),
     ...(ACTIVE_PHASES.includes(state.phase) ? {} : { finishedAt: new Date() }),
   };
@@ -184,6 +186,11 @@ export async function chooseFilter(id: string, filter: FilterId): Promise<Sessio
     throw new SessionError("That filter is not offered right now", 400);
   }
   return commandSession(id, { type: "filter_chosen", filter });
+}
+
+/** The guest flipped the photos on the review screen, or flipped them back. */
+export async function chooseMirror(id: string, mirrored: boolean): Promise<SessionRow> {
+  return commandSession(id, { type: "mirror_chosen", mirrored });
 }
 
 /**

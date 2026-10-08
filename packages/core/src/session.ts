@@ -12,7 +12,7 @@
  *   countdown ─(countdown_elapsed)─▶ capturing ─(shot_taken)─▶ countdown (next shot)
  *                                        │                 └─▶ composing (last shot)
  *                                        └─(shot_failed)─▶ countdown (retry) | failed
- *   composing ─(composed)─▶ review ─(filter_chosen)─▶ review
+ *   composing ─(composed)─▶ review ─(filter_chosen | mirror_chosen)─▶ review
  *                                 └─(accepted | timed_out)─▶ delivering ─(finished | timed_out)─▶ done
  *
  * Timing events (`countdown_elapsed`, `timed_out`) carry the phase and
@@ -55,6 +55,8 @@ export interface SessionState {
   reason: string | null;
   /** The look on the photos, chosen on the review screen; the camera's colours until then. */
   filter: FilterId;
+  /** The photos drawn flipped, the way the mirror showed the guest; chosen on the review screen. */
+  mirrored: boolean;
 }
 
 export type SessionEvent =
@@ -66,6 +68,7 @@ export type SessionEvent =
   | { type: "accepted" }
   | { type: "retake" }
   | { type: "filter_chosen"; filter: FilterId }
+  | { type: "mirror_chosen"; mirrored: boolean }
   | { type: "print_started" }
   | { type: "printed" }
   | { type: "print_failed"; reason: string }
@@ -138,6 +141,7 @@ export function beginSession(
     print: null,
     reason: null,
     filter: input.filter ?? DEFAULT_FILTER,
+    mirrored: false,
   };
   return armCountdown(state, 1, now);
 }
@@ -191,11 +195,17 @@ export function transition(state: SessionState, event: SessionEvent, now: Date):
       return armCountdownTransition({ ...state, takenCount: 0, attempts: 0 }, 1, now);
     }
 
-    // The guest compares the looks on the review screen. Once accepted
-    // the print is on its way with the one chosen, so no more changes.
+    // The guest compares the looks on the review screen, and flips the
+    // photos to match the mirror they posed in. Once accepted the print
+    // is on its way with what was chosen, so no more changes.
     case "filter_chosen": {
       if (state.phase !== "review") return refuse(`filter chosen in ${describe(state)}`);
       return ok({ ...state, filter: event.filter }, []);
+    }
+
+    case "mirror_chosen": {
+      if (state.phase !== "review") return refuse(`mirror chosen in ${describe(state)}`);
+      return ok({ ...state, mirrored: event.mirrored }, []);
     }
 
     case "print_started": {

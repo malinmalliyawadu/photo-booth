@@ -60,7 +60,7 @@ between a change in `core` and the app seeing it.
 countdown ─(countdown_elapsed)─▶ capturing ─(shot_taken)─▶ countdown (next shot)
                                      │                 └─▶ composing (last shot)
                                      └─(shot_failed)─▶ countdown (retry, 3 attempts) | failed
-composing ─(composed)─▶ review ─(filter_chosen)─▶ review
+composing ─(composed)─▶ review ─(filter_chosen | mirror_chosen)─▶ review
                               └─(accepted | timed_out)─▶ delivering ─(finished | timed_out)─▶ done
 any active phase ─(cancelled)─▶ abandoned
 ```
@@ -114,7 +114,9 @@ camera and the worker's capture job only logs that it is waiting.
   read is POSTed to `.../shots/{n}/failed` at once, so the state machine
   retries without waiting out the capturing timeout.
 - The photo is the camera's full, unmirrored frame. The preview is
-  mirrored with CSS only.
+  mirrored with CSS only, so the photo reads the other way round from
+  what the guest posed in; a guest who wants it the way the mirror
+  showed it flips it on the review screen (see **Filters**).
 
 **What guests see is what the layout keeps.** `viewfinderCrop`
 (`packages/core/src/viewfinder.ts`) crops the live preview, in every
@@ -230,6 +232,11 @@ compositor produces the print and web JPEGs from the same geometry and
   JPEGs on `accepted` (or recomposes then), not before the review.
   `booth.filters` is which ones the attendant offers; with one on offer
   the review shows no chips and every session gets that one.
+  **Mirroring is the same shape**: the "Mirrored" switch beside the
+  chips is a `mirror_chosen` event, `sessions.mirrored` is the choice,
+  `Composite` draws the photos with `scaleX(-1)` (the overlay stays),
+  and phase 2's compositor flops them with sharp. Off by default: the
+  true frame is what a DSLR gives, and text in the shot reads correctly.
 
 ## Phases
 

@@ -56,6 +56,8 @@ export interface SessionView {
   number: number;
   templateId: string;
   filter: FilterId;
+  /** The photos are drawn flipped, the way the mirror showed the guest. */
+  mirrored: boolean;
   phase: Phase;
   shot: number;
   shotCount: number;
@@ -104,6 +106,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     number: row.number,
     templateId: row.templateId,
     filter: row.filter,
+    mirrored: row.mirrored,
     phase: row.phase,
     shot: row.shot,
     shotCount: row.shotCount,
@@ -172,6 +175,7 @@ export async function readSessionView(id: string): Promise<SessionView | null> {
     number: row.number,
     templateId: row.templateId,
     filter: row.filter,
+    mirrored: row.mirrored,
     phase: row.phase,
     shot: row.shot,
     shotCount: row.shotCount,

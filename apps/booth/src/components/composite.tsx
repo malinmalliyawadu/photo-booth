@@ -2,18 +2,22 @@
 import { cssFilter, type FilterId } from "@booth/core";
 import type { TemplateSummary } from "@booth/db";
 
+/** How a photo is flipped: the same transform the live preview uses, so the two agree. */
+export const MIRROR_TRANSFORM = "scaleX(-1)";
+
 /**
  * A layout with photos in its slots, drawn by the browser: the photos
  * sit under the knocked-out template overlay at the slot rectangles,
  * scaled by percentage so one component serves a thumbnail and the
- * review screen alike. The session's filter is applied to the photos
- * here, never to the files. Phase 2's compositor makes the print from
- * the same geometry and the same look.
+ * review screen alike. The session's filter and mirroring are applied
+ * to the photos here, never to the files. Phase 2's compositor makes
+ * the print from the same geometry and the same look.
  */
 export function Composite({
   template,
   photos,
   filter = "colour",
+  mirrored = false,
   className = "",
   fit = false,
 }: {
@@ -22,6 +26,8 @@ export function Composite({
   photos: Record<number, string | undefined>;
   /** The look the guest picked; the overlay is never filtered. */
   filter?: FilterId;
+  /** Flip the photos, the way the mirror showed the guest; the overlay stays. */
+  mirrored?: boolean;
   className?: string;
   /**
    * Fill the parent like object-fit: contain. The parent must have a
@@ -34,6 +40,7 @@ export function Composite({
   const { width, height, slots } = template;
   const ratio = width / height;
   const look = cssFilter(filter);
+  const transform = mirrored ? MIRROR_TRANSFORM : undefined;
   const box = (
     <div
       className={`relative overflow-hidden bg-night-lifted ${className}`}
@@ -56,7 +63,7 @@ export function Composite({
             }}
           >
             {url ? (
-              <img src={url} alt="" className="h-full w-full object-cover" style={{ filter: look }} draggable={false} />
+              <img src={url} alt="" className="h-full w-full object-cover" style={{ filter: look, transform }} draggable={false} />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
                 <span className="mono text-cream-faint text-[1.2em]">{slot.shot}</span>

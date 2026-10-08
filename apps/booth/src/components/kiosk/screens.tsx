@@ -2,11 +2,11 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
-import { Camera, Check, Printer, RotateCcw, X } from "lucide-react";
+import { Camera, Check, FlipHorizontal2, Printer, RotateCcw, X } from "lucide-react";
 import { cssFilter, filterById, needsFilterChoice, spellShortId } from "@booth/core";
 import type { CameraMode, FilterId } from "@booth/core";
 import type { SessionView, TemplateSummary } from "@booth/db";
-import { Composite, samplePhotos, sessionPhotos } from "@/components/composite";
+import { Composite, MIRROR_TRANSFORM, samplePhotos, sessionPhotos } from "@/components/composite";
 import { useCountdown } from "./countdown";
 import type { IpadCamera } from "./use-ipad-camera";
 import { useIpadCapture } from "./use-ipad-capture";
@@ -80,7 +80,7 @@ export function AttractScreen({
               const t = byId.get(s.templateId);
               return t ? (
                 <div key={`${s.id}-${i}`} className="h-[36dvh]" style={{ width: `calc(36dvh * ${t.width / t.height})` }}>
-                  <Composite template={t} photos={sessionPhotos(s.shots)} filter={s.filter} className="rounded-xl" />
+                  <Composite template={t} photos={sessionPhotos(s.shots)} filter={s.filter} mirrored={s.mirrored} className="rounded-xl" />
                 </div>
               ) : null;
             })}
@@ -115,7 +115,7 @@ function AttractMirror({ stream }: { stream: MediaStream }) {
       onPlaying={() => setPlaying(true)}
       data-testid="attract-camera"
       className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${playing ? "opacity-100" : "opacity-0"}`}
-      style={{ transform: "scaleX(-1)" }}
+      style={{ transform: MIRROR_TRANSFORM }}
     />
   );
 }
@@ -225,7 +225,7 @@ export function LiveScreen({
   const look = cssFilter(session.filter);
 
   return (
-    <div className="relative flex h-dvh flex-col overflow-hidden" data-testid="live" data-phase={session.phase} data-filter={session.filter}>
+    <div className="relative flex h-dvh flex-col overflow-hidden" data-testid="live" data-phase={session.phase} data-filter={session.filter} data-mirrored={session.mirrored}>
       <div className="absolute inset-0">
         <Viewfinder frame={frame ?? (ipad ? IPAD_FRAME : DSLR_FRAME)} slots={template.slots} shot={session.shot}>
           <div className="h-full w-full" style={{ filter: look }} data-testid="viewfinder-look">
@@ -287,7 +287,9 @@ export function LiveScreen({
               key={n}
               className={`h-20 w-28 overflow-hidden rounded-lg bg-night-raised shadow-lg ring-1 ring-night-edge ${freshShot?.shot === n ? "animate-rise" : ""}`}
             >
-              {photos[n] ? <img src={photos[n]} alt="" className="h-full w-full object-cover" style={{ filter: look }} /> : null}
+              {photos[n] ? (
+                <img src={photos[n]} alt="" className="h-full w-full object-cover" style={{ filter: look, transform: session.mirrored ? MIRROR_TRANSFORM : undefined }} />
+              ) : null}
             </div>
           ))}
         </div>
@@ -335,7 +337,7 @@ function LiveVideo({
       v.removeEventListener("resize", report);
     };
   }, [stream, onFrame]);
-  return <video ref={own} autoPlay playsInline muted className="h-full w-full object-cover" style={{ transform: "scaleX(-1)" }} />;
+  return <video ref={own} autoPlay playsInline muted className="h-full w-full object-cover" style={{ transform: MIRROR_TRANSFORM }} />;
 }
 
 /** Stands in for the live preview when the fake camera is in use. */
@@ -360,16 +362,18 @@ export function ComposingScreen() {
 }
 
 /**
- * The photos, through the filter the guest picks here. A tap shows at
- * once on the composite and goes to the booth; the snapshot confirms it
- * a moment later. The chips are the first photo through each look, so
- * the comparison is on the guest's own face, not a sample.
+ * The photos, through the filter the guest picks here, flipped if they
+ * want them the way the mirror showed them. A tap shows at once on the
+ * composite and goes to the booth; the snapshot confirms it a moment
+ * later. The chips are the first photo through each look, so the
+ * comparison is on the guest's own face, not a sample.
  */
 export function ReviewScreen({
   session,
   template,
   filters,
   onFilter,
+  onMirror,
   onAccept,
   onRetake,
   onCancel,
@@ -380,6 +384,7 @@ export function ReviewScreen({
   /** What the booth offers; with one there is nothing to ask. */
   filters: FilterId[];
   onFilter: (id: FilterId) => void;
+  onMirror: (mirrored: boolean) => void;
   onAccept: () => void;
   onRetake: () => void;
   onCancel: () => void;
@@ -388,9 +393,12 @@ export function ReviewScreen({
   const [chosen, setChosen] = useState<FilterId | null>(null);
   if (chosen !== null && chosen === session.filter) setChosen(null);
   const filter = chosen ?? session.filter;
+  const [flipped, setFlipped] = useState<boolean | null>(null);
+  if (flipped !== null && flipped === session.mirrored) setFlipped(null);
+  const mirrored = flipped ?? session.mirrored;
   const sample = session.shots[0]?.url;
   return (
-    <div className="flex h-dvh flex-col px-10 pt-safe-8 pb-safe-8" data-testid="review" data-filter={filter}>
+    <div className="flex h-dvh flex-col px-10 pt-safe-8 pb-safe-8" data-testid="review" data-filter={filter} data-mirrored={mirrored}>
       <header className="flex items-end justify-between">
         <div className="animate-rise">
           <p className="eyebrow">Looking good</p>
@@ -405,38 +413,51 @@ export function ReviewScreen({
           template={template}
           photos={sessionPhotos(session.shots)}
           filter={filter}
+          mirrored={mirrored}
           className="rounded-xl shadow-[0_40px_80px_-30px_rgba(0,0,0,0.9)]"
           fit
         />
       </div>
-      {needsFilterChoice(filters) && (
-        <div className="mb-6 flex animate-rise justify-center gap-3" role="radiogroup" aria-label="Filter" data-testid="filters" style={{ animationDelay: "120ms" }}>
-          {filters.map((id) => {
-            const selected = filter === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                onClick={() => {
-                  setChosen(id);
-                  onFilter(id);
-                }}
-                data-testid={`filter-${id}`}
-                className={`flex flex-col items-center gap-2 rounded-2xl p-2 pb-3 transition active:scale-[0.97] ${
-                  selected ? "bg-night-lifted shadow-[inset_0_0_0_2px_var(--color-ember)]" : "shadow-[inset_0_0_0_1px_var(--color-night-edge)]"
-                }`}
-              >
-                <div className="h-20 w-28 overflow-hidden rounded-xl bg-night-raised">
+      <div className="mb-6 flex animate-rise items-stretch justify-center gap-3" style={{ animationDelay: "120ms" }}>
+        {needsFilterChoice(filters) && (
+          <>
+            <div className="flex gap-3" role="radiogroup" aria-label="Filter" data-testid="filters">
+              {filters.map((id) => (
+                <Chip
+                  key={id}
+                  role="radio"
+                  selected={filter === id}
+                  label={filterById(id).name}
+                  testId={`filter-${id}`}
+                  onClick={() => {
+                    setChosen(id);
+                    onFilter(id);
+                  }}
+                >
                   {sample && <img src={sample} alt="" className="h-full w-full object-cover" style={{ filter: cssFilter(id) }} draggable={false} />}
-                </div>
-                <span className={`text-base font-semibold ${selected ? "text-cream" : "text-cream-soft"}`}>{filterById(id).name}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+                </Chip>
+              ))}
+            </div>
+            <div className="my-3 w-px bg-night-edge" aria-hidden />
+          </>
+        )}
+        {/* The photo the way the mirror showed it: the chip is the first shot flipped, in the chosen look. */}
+        <Chip
+          role="switch"
+          selected={mirrored}
+          label="Mirrored"
+          icon={<FlipHorizontal2 className="h-4 w-4" />}
+          testId="mirror"
+          onClick={() => {
+            setFlipped(!mirrored);
+            onMirror(!mirrored);
+          }}
+        >
+          {sample && (
+            <img src={sample} alt="" className="h-full w-full object-cover" style={{ filter: cssFilter(filter), transform: MIRROR_TRANSFORM }} draggable={false} />
+          )}
+        </Chip>
+      </div>
       <footer className="flex items-center justify-center gap-5">
         <button type="button" onClick={onRetake} className="tap tap-quiet" disabled={busy}>
           <RotateCcw className="h-7 w-7" /> Retake
@@ -446,6 +467,47 @@ export function ReviewScreen({
         </button>
       </footer>
     </div>
+  );
+}
+
+/**
+ * One choice on the review screen: a thumbnail of the guest's own first
+ * photo the way this option would show it, with its name under it.
+ */
+function Chip({
+  role,
+  selected,
+  label,
+  icon,
+  testId,
+  onClick,
+  children,
+}: {
+  role: "radio" | "switch";
+  selected: boolean;
+  label: string;
+  icon?: React.ReactNode;
+  testId: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role={role}
+      aria-checked={selected}
+      onClick={onClick}
+      data-testid={testId}
+      className={`flex flex-col items-center gap-2 rounded-2xl p-2 pb-3 transition active:scale-[0.97] ${
+        selected ? "bg-night-lifted shadow-[inset_0_0_0_2px_var(--color-ember)]" : "shadow-[inset_0_0_0_1px_var(--color-night-edge)]"
+      }`}
+    >
+      <div className="h-20 w-28 overflow-hidden rounded-xl bg-night-raised">{children}</div>
+      <span className={`flex items-center gap-1.5 text-base font-semibold ${selected ? "text-cream" : "text-cream-soft"}`}>
+        {icon}
+        {label}
+      </span>
+    </button>
   );
 }
 
@@ -473,6 +535,7 @@ export function DeliverScreen({
             template={template}
             photos={sessionPhotos(session.shots)}
             filter={session.filter}
+            mirrored={session.mirrored}
             className="rounded-xl shadow-[0_40px_80px_-30px_rgba(0,0,0,0.9)]"
             fit
           />
