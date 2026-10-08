@@ -81,7 +81,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
     screen = picking ? (
       <PickerScreen templates={active} busy={busy} error={error} onPick={start} onBack={() => setPicking(false)} />
     ) : (
-      <AttractScreen eventName={booth.eventName} recent={snapshot.recent} templates={templates} onTap={tapToStart} />
+      <AttractScreen eventName={booth.eventName} recent={snapshot.recent} templates={templates} stream={camera.stream} onTap={tapToStart} />
     );
   } else {
     const url = (c: string) => `/api/sessions/${session.id}/${c}`;

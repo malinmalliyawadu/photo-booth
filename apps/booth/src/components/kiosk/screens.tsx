@@ -18,13 +18,51 @@ export function AttractScreen({
   eventName,
   recent,
   templates,
+  stream,
   onTap,
 }: {
   eventName: string;
   recent: SessionView[];
   templates: TemplateSummary[];
+  /** The iPad's front camera when it is live: guests see themselves and come over. */
+  stream: MediaStream | null;
   onTap: () => void;
 }) {
+  const title = (
+    <>
+      <p className="eyebrow">Photo booth</p>
+      <h1 className="display text-[clamp(3.5rem,11vw,9rem)] leading-[0.95] text-cream">{eventName}</h1>
+      <div className="mt-4 flex items-center gap-4">
+        <span className="tap animate-breathe">
+          <Camera className="h-8 w-8" strokeWidth={2.4} />
+          Tap to start
+        </span>
+      </div>
+    </>
+  );
+
+  // A mirror pulls people in better than other people's photos, so the
+  // live camera takes the whole screen and the words move to the bottom,
+  // clear of the faces in it.
+  if (stream) {
+    return (
+      <button
+        type="button"
+        onClick={onTap}
+        data-testid="attract"
+        data-background="camera"
+        className="relative flex h-dvh w-full flex-col items-center justify-end overflow-hidden bg-night pb-[calc(8dvh+env(safe-area-inset-bottom))] text-left"
+      >
+        <AttractMirror stream={stream} />
+        <div
+          className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(15,17,19,0.4)_0%,rgba(15,17,19,0)_20%,rgba(15,17,19,0)_38%,rgba(15,17,19,0.82)_62%,rgba(15,17,19,0.96)_100%)]"
+          aria-hidden
+        />
+        <div className="relative flex animate-rise flex-col items-center gap-6 px-10 text-center">{title}</div>
+      </button>
+    );
+  }
+
   const strip = recent.filter((s) => s.takenCount === s.shotCount && s.shots.length > 0).slice(0, 12);
   const byId = new Map(templates.map((t) => [t.id, t]));
   return (
@@ -32,6 +70,7 @@ export function AttractScreen({
       type="button"
       onClick={onTap}
       data-testid="attract"
+      data-background="photos"
       className="relative flex h-dvh w-full flex-col items-center justify-center overflow-hidden bg-night text-left"
     >
       {strip.length > 0 && (
@@ -49,17 +88,35 @@ export function AttractScreen({
         </div>
       )}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(15,17,19,0.35)_0%,rgba(15,17,19,0.92)_70%)]" aria-hidden />
-      <div className="relative flex animate-rise flex-col items-center gap-10 px-10 text-center">
-        <p className="eyebrow">Photo booth</p>
-        <h1 className="display text-[clamp(3.5rem,11vw,9rem)] leading-[0.95] text-cream">{eventName}</h1>
-        <div className="mt-4 flex items-center gap-4">
-          <span className="tap animate-breathe">
-            <Camera className="h-8 w-8" strokeWidth={2.4} />
-            Tap to start
-          </span>
-        </div>
-      </div>
+      <div className="relative flex animate-rise flex-col items-center gap-10 px-10 text-center">{title}</div>
     </button>
+  );
+}
+
+/**
+ * The front camera behind the attract loop, mirrored like the live
+ * screen's. It fades in on its first frame, so a camera still waking up
+ * shows the night background rather than a black rectangle.
+ */
+function AttractMirror({ stream }: { stream: MediaStream }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    const v = video.current;
+    if (v && v.srcObject !== stream) v.srcObject = stream;
+  }, [stream]);
+  return (
+    <video
+      ref={video}
+      autoPlay
+      playsInline
+      muted
+      aria-hidden
+      onPlaying={() => setPlaying(true)}
+      data-testid="attract-camera"
+      className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${playing ? "opacity-100" : "opacity-0"}`}
+      style={{ transform: "scaleX(-1)" }}
+    />
   );
 }
 
@@ -91,7 +148,7 @@ export function PickerScreen({
   const columns = templates.length <= 3 ? Math.max(templates.length, 1) : Math.ceil(templates.length / 2);
   const rows = templates.length <= 3 ? 1 : 2;
   return (
-    <div className="flex h-dvh flex-col px-10 pt-10 pb-8" data-testid="picker">
+    <div className="flex h-dvh flex-col px-10 pt-safe-10 pb-safe-8" data-testid="picker">
       <header className="flex items-end justify-between">
         <div className="animate-rise">
           <p className="eyebrow">Step one</p>
@@ -192,7 +249,7 @@ export function LiveScreen({
         session.phase === "capturing" && <div key={`flash-${session.shot}`} className="pointer-events-none absolute inset-0 z-20 animate-flash bg-cream" />
       )}
 
-      <header className="relative z-10 flex items-start justify-between px-10 pt-8">
+      <header className="relative z-10 flex items-start justify-between px-10 pt-safe-8">
         <div>
           <p className="eyebrow">{template.name}</p>
           <p className="display mt-1 text-4xl" data-testid="shot-label">
@@ -216,7 +273,7 @@ export function LiveScreen({
         ) : null}
       </div>
 
-      <footer className="relative z-10 flex items-end justify-between px-10 pb-8">
+      <footer className="relative z-10 flex items-end justify-between px-10 pb-safe-8">
         <div className="flex gap-3">
           {Array.from({ length: session.shotCount }, (_, i) => i + 1).map((n) => (
             <div
@@ -311,7 +368,7 @@ export function ReviewScreen({
   busy: boolean;
 }) {
   return (
-    <div className="flex h-dvh flex-col px-10 pt-8 pb-8" data-testid="review">
+    <div className="flex h-dvh flex-col px-10 pt-safe-8 pb-safe-8" data-testid="review">
       <header className="flex items-end justify-between">
         <div className="animate-rise">
           <p className="eyebrow">Looking good</p>
@@ -349,7 +406,7 @@ export function DeliverScreen({
 }) {
   const print = printLine(session);
   return (
-    <div className="flex h-dvh flex-col px-10 pt-8 pb-8" data-testid="deliver">
+    <div className="flex h-dvh flex-col px-10 pt-safe-8 pb-safe-8" data-testid="deliver">
       <header className="animate-rise">
         <p className="eyebrow">All done</p>
         <h1 className="display mt-2 text-[clamp(2.5rem,6vw,4.5rem)] leading-none">Scan for your photos</h1>
@@ -413,7 +470,7 @@ export function EndedScreen({ reason, onDismiss }: { reason: string | null; onDi
 export function ConnectionBanner({ connected }: { connected: boolean }) {
   if (connected) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center p-3" data-testid="disconnected">
+    <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center p-3 pt-safe-3" data-testid="disconnected">
       <span className="pill pill-warn animate-pulse-soft text-sm">Reconnecting to the booth</span>
     </div>
   );
