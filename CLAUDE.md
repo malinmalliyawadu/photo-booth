@@ -18,9 +18,9 @@ Vitest for pure modules, Playwright for the kiosk's happy path.
 
 | Path | What it is | Runs on |
 | --- | --- | --- |
-| `apps/booth` | Next.js: kiosk (`/`), admin (`/admin`), slideshow (`/slideshow`), the session API, the SSE stream, `/media` | The controller |
+| `apps/booth` | Next.js: kiosk (`/`), admin (`/admin`), slideshow (`/slideshow`), the session API, the SSE stream, `/media` | The controller, or Coolify |
 | `apps/gallery` | Next.js: one page per session, the all-photos page, the sync endpoint (phase 5; a stub today); `Dockerfile` builds it from the repo root | Coolify |
-| `packages/worker` | Node process: camera, compositor, print queue, cloud sync, the jobs loop | The controller |
+| `packages/worker` | Node process: camera, compositor, print queue, cloud sync, the jobs loop | The controller, or Coolify |
 | `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants, the `Camera` interface | Both apps and the worker |
 | `packages/db` | Drizzle schema + migrations, the repositories, the data directory, the snapshot | Both apps and the worker |
 | `templates/` | Layout PNGs and optional JSON sidecars; the seed loads them | Uploaded through admin on the night |
@@ -160,6 +160,17 @@ compositor produces the print and web JPEGs from the same geometry and
   which in Coolify is Base Directory `/` and Dockerfile Location
   `/apps/gallery/Dockerfile`. It binds `::` so a health check against
   `localhost` works whether that resolves to IPv4 or IPv6.
+- **The kiosk can run on the internet.** `docker-compose.coolify.yml`
+  deploys Postgres, the worker and the booth app to Coolify as one
+  resource, and the iPad opens its domain; Coolify's certificate means
+  no private CA. `apps/booth/Dockerfile` and `packages/worker/Dockerfile`
+  build from the repo root like the gallery's, share a `/data` volume as
+  the same `node` user, and the worker applies migrations before the
+  seed so a fresh database needs no manual step. The camera there is
+  the iPad's (no USB), the printer is fake, and anyone with the URL
+  reaches the kiosk; `/admin` stays behind the password. Pages that
+  read runtime secrets must be dynamic, because the image is built
+  without them.
 - **The dev `.env` lives at the repo root** and is read by the worker,
   the db scripts and (through `next.config.ts`) the app.
 - **Delete on request** keeps the session row for the numbering and the

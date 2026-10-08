@@ -31,9 +31,8 @@ FROM node:24-alpine AS run
 # resolves localhost to ::1 (busybox wget does) reaches the server.
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=:: PORT=3200
 WORKDIR /app
-RUN addgroup -S booth && adduser -S booth -G booth
-COPY --from=build --chown=booth:booth /repo/apps/gallery/.next/standalone ./
-COPY --from=build --chown=booth:booth /repo/apps/gallery/.next/static ./apps/gallery/.next/static
-USER booth
+COPY --from=build --chown=node:node /repo/apps/gallery/.next/standalone ./
+COPY --from=build --chown=node:node /repo/apps/gallery/.next/static ./apps/gallery/.next/static
+USER node
 EXPOSE 3200
 CMD ["node", "apps/gallery/server.js"]

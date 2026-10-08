@@ -1,0 +1,7 @@
+# Publishes the booth on localhost:3100 for a local run of
+# docker-compose.coolify.yml. Coolify routes through its proxy and
+# must not get this file.
+services:
+  booth:
+    ports:
+      - "3100:3100"
