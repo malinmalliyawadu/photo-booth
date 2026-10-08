@@ -6,16 +6,20 @@ import type { TemplateSummary } from "@booth/db";
 export const MIRROR_TRANSFORM = "scaleX(-1)";
 
 /**
- * A layout with photos in its slots, drawn by the browser: the photos
- * sit under the knocked-out template overlay at the slot rectangles,
- * scaled by percentage so one component serves a thumbnail and the
- * review screen alike. The session's filter and mirroring are applied
- * to the photos here, never to the files. Phase 2's compositor makes
- * the print from the same geometry and the same look.
+ * A layout with photos in its slots. Until a session is composed the
+ * browser draws it: the photos sit under the knocked-out template
+ * overlay at the slot rectangles, scaled by percentage so one component
+ * serves a thumbnail and the review screen alike, with the session's
+ * filter and mirroring applied to the photos here, never to the files.
+ * The compositor makes the print and web JPEGs from the same geometry
+ * and the same look (`placePhotos`, `applyLook`); once it has, `composed`
+ * shows that JPEG in the same box, which is exactly what was printed and
+ * sent to the gallery.
  */
 export function Composite({
   template,
   photos,
+  composed,
   filter = "colour",
   mirrored = false,
   className = "",
@@ -24,6 +28,8 @@ export function Composite({
   template: Pick<TemplateSummary, "width" | "height" | "slots" | "screenUrl" | "name">;
   /** Shot number to image URL. Missing shots render as an empty slot. */
   photos: Record<number, string | undefined>;
+  /** The compositor's JPEG, when there is one: shown instead of drawing the photos. */
+  composed?: string | null;
   /** The look the guest picked; the overlay is never filtered. */
   filter?: FilterId;
   /** Flip the photos, the way the mirror showed the guest; the overlay stays. */
@@ -37,7 +43,7 @@ export function Composite({
    */
   fit?: boolean;
 }) {
-  const { width, height, slots } = template;
+  const { width, height } = template;
   const ratio = width / height;
   const look = cssFilter(filter);
   const transform = mirrored ? MIRROR_TRANSFORM : undefined;
@@ -49,6 +55,31 @@ export function Composite({
         ...(fit ? { width: `min(100%, calc(100cqh * ${ratio}))` } : {}),
       }}
     >
+      {composed ? (
+        <img src={composed} alt={template.name} className="absolute inset-0 h-full w-full" draggable={false} data-testid="composed" />
+      ) : (
+        <BrowserDrawn template={template} photos={photos} look={look} transform={transform} />
+      )}
+    </div>
+  );
+  if (!fit) return box;
+  return <div className="flex h-full w-full items-center justify-center [container-type:size]">{box}</div>;
+}
+
+function BrowserDrawn({
+  template,
+  photos,
+  look,
+  transform,
+}: {
+  template: Pick<TemplateSummary, "width" | "height" | "slots" | "screenUrl" | "name">;
+  photos: Record<number, string | undefined>;
+  look: string;
+  transform: string | undefined;
+}) {
+  const { width, height, slots } = template;
+  return (
+    <>
       {slots.map((slot, i) => {
         const url = photos[slot.shot];
         return (
@@ -78,10 +109,8 @@ export function Composite({
         className="pointer-events-none absolute inset-0 h-full w-full"
         draggable={false}
       />
-    </div>
+    </>
   );
-  if (!fit) return box;
-  return <div className="flex h-full w-full items-center justify-center [container-type:size]">{box}</div>;
 }
 
 /** The sample photos under public/samples, one per shot, for previews. */

@@ -10,10 +10,17 @@
  * session is allowed to do.
  *
  *   countdown ─(countdown_elapsed)─▶ capturing ─(shot_taken)─▶ countdown (next shot)
- *                                        │                 └─▶ composing (last shot)
+ *                                        │                 └─▶ review (last shot)
  *                                        └─(shot_failed)─▶ countdown (retry) | failed
- *   composing ─(composed)─▶ review ─(filter_chosen | mirror_chosen)─▶ review
- *                                 └─(accepted | timed_out)─▶ delivering ─(finished | timed_out)─▶ done
+ *   review ─(filter_chosen | mirror_chosen)─▶ review
+ *          ├─(retake)─▶ countdown (shot 1)
+ *          └─(accepted | timed_out)─▶ composing ─(composed)─▶ delivering ─(finished | timed_out)─▶ done
+ *                                               └─(compose_failed | timed_out)─▶ failed
+ *
+ * The review comes before the compositor because the review is where
+ * the guest picks the look and the mirror: the browser draws the photos
+ * under the layout with each choice as it is made, and the print and
+ * web JPEGs are made once, from what was accepted.
  *
  * Timing events (`countdown_elapsed`, `timed_out`) carry the phase and
  * shot they were armed for and are ignored when the session has moved
@@ -49,7 +56,7 @@ export interface SessionState {
   countdownSeconds: number;
   /** When the current countdown fires, ISO 8601, or null outside `countdown`. */
   countdownEndsAt: string | null;
-  /** Null until the guest accepts. */
+  /** Null until the photos are put together and the print is queued. */
   print: PrintStatus | null;
   /** Why the session failed or was abandoned, for the admin page. */
   reason: string | null;
@@ -165,8 +172,8 @@ export function transition(state: SessionState, event: SessionEvent, now: Date):
       if (takenCount < state.shotCount) {
         return armCountdownTransition({ ...state, takenCount, attempts: 0 }, state.shot + 1, now);
       }
-      const next = { ...state, phase: "composing" as const, takenCount, attempts: 0 };
-      return ok(next, [{ kind: "compose" }, timeout(next, now)]);
+      const next = { ...state, phase: "review" as const, takenCount, attempts: 0 };
+      return ok(next, [timeout(next, now)]);
     }
 
     case "shot_failed": {
@@ -176,8 +183,7 @@ export function transition(state: SessionState, event: SessionEvent, now: Date):
 
     case "composed": {
       if (state.phase !== "composing") return refuse(`composed in ${describe(state)}`);
-      const next = { ...state, phase: "review" as const };
-      return ok(next, [timeout(next, now)]);
+      return deliver(state, now);
     }
 
     case "compose_failed": {
@@ -187,7 +193,7 @@ export function transition(state: SessionState, event: SessionEvent, now: Date):
 
     case "accepted": {
       if (state.phase !== "review") return refuse(`accepted in ${describe(state)}`);
-      return deliver(state, now);
+      return compose(state, now);
     }
 
     case "retake": {
@@ -196,8 +202,8 @@ export function transition(state: SessionState, event: SessionEvent, now: Date):
     }
 
     // The guest compares the looks on the review screen, and flips the
-    // photos to match the mirror they posed in. Once accepted the print
-    // is on its way with what was chosen, so no more changes.
+    // photos to match the mirror they posed in. Once accepted the photos
+    // are put together with what was chosen, so no more changes.
     case "filter_chosen": {
       if (state.phase !== "review") return refuse(`filter chosen in ${describe(state)}`);
       return ok({ ...state, filter: event.filter }, []);
@@ -239,7 +245,7 @@ export function transition(state: SessionState, event: SessionEvent, now: Date):
         case "composing":
           return ok({ ...state, phase: "failed", reason: "compositing did not finish in time" }, []);
         case "review":
-          return deliver(state, now);
+          return compose(state, now);
         case "delivering":
           return ok({ ...state, phase: "done" }, []);
         default:
@@ -247,6 +253,12 @@ export function transition(state: SessionState, event: SessionEvent, now: Date):
       }
     }
   }
+}
+
+/** The look is settled: the worker puts the print and web JPEGs together. */
+function compose(state: SessionState, now: Date): Transition {
+  const next = { ...state, phase: "composing" as const };
+  return ok(next, [{ kind: "compose" }, timeout(next, now)]);
 }
 
 function deliver(state: SessionState, now: Date): Transition {

@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import {
   ACTIVE_PHASES,
   beginSession,
@@ -229,11 +229,39 @@ export async function shotPath(id: string, shot: number): Promise<string | null>
   return row?.path ?? null;
 }
 
+/** A session's shots in order, as stored. */
+export async function listShots(id: string): Promise<{ shot: number; path: string }[]> {
+  return db
+    .select({ shot: shots.shot, path: shots.path })
+    .from(shots)
+    .where(eq(shots.sessionId, id))
+    .orderBy(asc(shots.shot));
+}
+
+/**
+ * Records the compositor's files on the session. Files it replaces (a
+ * recompose) are removed once the new ones are committed; none is ever
+ * overwritten, because `/media` serves them as immutable. A session
+ * deleted while it was composing keeps no files: the new ones are
+ * removed and false comes back.
+ */
 export async function setComposite(
   id: string,
   paths: { compositePath: string; webPath: string; thumbPath: string },
-): Promise<void> {
-  await db.update(sessions).set({ ...paths, updatedAt: new Date() }).where(eq(sessions.id, id));
+): Promise<boolean> {
+  const replaced = await db.transaction(async (tx) => {
+    const [row] = await tx.select().from(sessions).where(eq(sessions.id, id)).for("update");
+    if (!row || row.deletedAt) return null;
+    await tx.update(sessions).set({ ...paths, updatedAt: new Date() }).where(eq(sessions.id, id));
+    await notify(tx);
+    return [row.compositePath, row.webPath, row.thumbPath].filter((p): p is string => p !== null);
+  });
+  if (replaced === null) {
+    await removeAll(Object.values(paths));
+    return false;
+  }
+  await removeAll(replaced);
+  return true;
 }
 
 export async function markSynced(id: string): Promise<void> {

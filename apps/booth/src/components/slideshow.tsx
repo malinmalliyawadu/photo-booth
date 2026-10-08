@@ -41,7 +41,7 @@ export function Slideshow({ initial }: { initial: Snapshot }) {
     <main className="relative flex h-dvh items-center justify-center overflow-hidden bg-night p-[6vmin] text-cream" data-testid="slideshow">
       {current && template ? (
         <div key={current.id} className="h-full w-full animate-rise">
-          <Composite template={template} photos={sessionPhotos(current.shots)} filter={current.filter} mirrored={current.mirrored} className="rounded-2xl shadow-[0_60px_120px_-40px_rgba(0,0,0,0.9)]" fit />
+          <Composite template={template} photos={sessionPhotos(current.shots)} composed={current.webUrl} filter={current.filter} mirrored={current.mirrored} className="rounded-2xl shadow-[0_60px_120px_-40px_rgba(0,0,0,0.9)]" fit />
         </div>
       ) : (
         <div className="text-center">
