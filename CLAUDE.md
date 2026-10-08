@@ -3,7 +3,8 @@
 A guest taps the iPad, picks a layout and a filter, poses through a
 countdown with one shot per photo slot, and gets a QR code to their
 photos. One postcard print comes out for the guestbook. The booth has
-internet at the venue: the online gallery fills as sessions finish.
+internet at the venue: the event's own site, where guests upload their
+phone photos too, fills with the booth's photos as sessions finish.
 
 Built for a wedding, named without it on purpose: the booth will be
 lent to friends' parties, and nothing in the code is specific to one
@@ -18,10 +19,9 @@ Vitest for pure modules, Playwright for the kiosk's happy path.
 | Path | What it is | Runs on |
 | --- | --- | --- |
 | `apps/booth` | Next.js: kiosk (`/`), admin (`/admin`), slideshow (`/slideshow`), the session API, the SSE stream, `/media` | The controller, or Coolify |
-| `apps/gallery` | Next.js: one page per session, the all-photos page, the sync endpoint (phase 5; a stub today); `Dockerfile` builds it from the repo root | Coolify |
-| `packages/worker` | Node process: camera, compositor, print queue, cloud sync, the jobs loop | The controller, or Coolify |
-| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants, the filter catalogue, the `Camera` interface, the iPad capture plan and viewfinder crop | Both apps and the worker |
-| `packages/db` | Drizzle schema + migrations, the repositories, the data directory, the snapshot | Both apps and the worker |
+| `packages/worker` | Node process: camera, compositor, print queue, the gallery sync, the jobs loop | The controller, or Coolify |
+| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants, the filter catalogue, the `Camera` interface, the iPad capture plan and viewfinder crop, the gallery setting and sync plan | The app and the worker |
+| `packages/db` | Drizzle schema + migrations, the repositories, the data directory, the snapshot | The app and the worker |
 | `templates/` | Layout PNGs and optional JSON sidecars; the seed loads them | Uploaded through admin on the night |
 | `ops/` | `ca.sh` (local certificate authority), `Caddyfile`; systemd units and the soak test arrive in phase 6 | The controller |
 | `e2e/` | Playwright, against the real app, worker and Postgres | |
@@ -29,6 +29,11 @@ Vitest for pure modules, Playwright for the kiosk's happy path.
 Workspace packages are consumed as TypeScript source (`exports` point at
 `src/index.ts`, Next has `transpilePackages`), so there is no build step
 between a change in `core` and the app seeing it.
+
+**There is no gallery app in this repo.** The gallery is the event's own
+site: for the wedding, the wedding-planner app (`~/Projects/wedding-planner`),
+whose album already takes guests' phone uploads. The booth pushes each
+finished session there and the QR links there; see **The gallery**.
 
 ## Commands
 
@@ -49,7 +54,7 @@ between a change in `core` and the app seeing it.
 - **Pure modules get unit tests, UI does not.** `packages/core` is pure: no database, no clock, no filesystem. Anything that decides what happens next belongs there.
 - **The state machine is the only way a session changes.** `applySessionEvent` in `packages/db/src/sessions.ts` loads the row under a lock, runs `transition`, persists, enqueues effects and NOTIFYs, in one transaction. Route handlers and worker handlers call it; nobody writes `sessions.phase` by hand.
 - **Every state change ends with NOTIFY inside the transaction**, so the worker and the SSE stream learn about it on commit and never see a half-written row.
-- **The booth has internet, but a session never waits on it.** Uploads and the gallery sync run as jobs with retries; the QR is made on the controller; fonts are files in the repo. A slow or dropped connection delays the gallery, never the countdown, the review or the print.
+- **The booth has internet, but a session never waits on it.** The gallery sync is a job with an hour of retries; the QR is made on the controller and its link is known before anything is uploaded; fonts are files in the repo. A slow or dropped connection delays the gallery, never the countdown, the review or the print.
 - **`/admin` and `/api/admin` stay behind the password.** Anybody on the booth Wi-Fi can reach the controller, and admin can delete sessions and see every photo. `src/proxy.ts` is the gate; `ADMIN_PASSWORD` unset means nobody signs in.
 - **Stored paths are relative to the data directory** (`BOOTH_DATA_DIR`), so the directory can move or be restored without touching a row. `resolveData` refuses anything that escapes it.
 - **A stored file is never overwritten.** `/media` serves everything as immutable, so `sessionPaths` names a new file on every call (a retake, a recompose) and the row is how it is found again. Reusing a name shows the guest the old photo from Safari's cache.
@@ -143,6 +148,39 @@ a 250 ms poll catches due countdowns. It reports `worker`, `camera`,
 `printer` and `sync` health every 5 s into `components`, serves
 `/health` on 3101, and will serve the MJPEG preview there in phase 3.
 
+## The gallery (`packages/core/src/gallery.ts`, `packages/worker/src/gallery.ts`)
+
+The booth is lent to other parties, so it knows nothing about any one
+site: it knows how to push a session to a URL with a token, and what
+link to put in the QR. Three variables, all optional:
+
+- `GALLERY_SYNC_URL` and `GALLERY_SYNC_TOKEN` (the worker): where each
+  finished session is POSTed as multipart form data: `session` (the
+  short ID), `takenAt`, `width`, `height`, `photo` (the web JPEG) and
+  `thumb`, with the token as a bearer. The gallery keys on `session`,
+  so a retry or an admin "send again" replaces its copy. A GET with the
+  same header is the reachability check the heartbeat makes once a
+  minute, which is the `sync` card on admin.
+- `GALLERY_SESSION_URL` (the app): the QR link, with `{id}` where the
+  session ID goes (or a prefix it is appended to).
+
+`gallerySetting(env)` reads them and reports half a configuration
+instead of guessing; `planSync` decides whether a session is uploaded,
+skipped (no gallery, or deleted) or failed for the queue to retry (no
+web JPEG yet, misconfigured). **The sync sends the compositor's web
+JPEG and thumbnail, never the raw shots**: the look and the mirror are
+baked in, and the shots are the camera's own frames. Until phase 2's
+compositor fills `webPath`, a configured gallery fails every sync with
+"the compositor has not produced one", which is the honest state;
+with no gallery configured a session is simply never `synced`, and the
+admin row says so.
+
+The wedding-planner's end is `POST /api/booth/photos` (the token is its
+`BOOTH_SYNC_TOKEN`) and the page `/i/booth/{id}`, which shows the print
+with a save button, says "on its way" until the sync lands, and 404s
+like the rest of its public surface when the site is unpublished or the
+couple hid the photo.
+
 ## Templates
 
 A layout is a Canva PNG with every photo slot painted `#FF00FF`.
@@ -173,26 +211,27 @@ compositor produces the print and web JPEGs from the same geometry and
   of a fixed label under it, so changing the password signs everyone
   out and the browser stores nothing reusable.
 - **Phase 1 fakes**: `FakeCamera` cycles sample photos, `FakePrinter`
-  waits 1.5 s and the paper counter still comes down, the sync handler
-  marks the session synced. The compose handler is a no-op until phase 2.
-- **Ports**: Postgres 5436, booth 3100, worker 3101, gallery 3200,
-  chosen to stay clear of the other projects on this machine.
-- **The gallery ships as a Docker image**, not through Coolify's
-  Nixpacks: `apps/gallery/Dockerfile` installs only `@booth/gallery`
-  and `@booth/core` from the workspace, runs `next build` with
-  `output: "standalone"`, and copies the traced server into a
-  `node:24-alpine` runner as a non-root user on 3200. The build context
-  is the repo root (`.dockerignore` keeps data, certs and `.env` out),
-  which in Coolify is Base Directory `/` and Dockerfile Location
-  `/apps/gallery/Dockerfile`. It binds `::` so a health check against
-  `localhost` works whether that resolves to IPv4 or IPv6.
+  waits 1.5 s and the paper counter still comes down. The compose
+  handler is a no-op until phase 2, which is also why the sync, which
+  is real, has nothing to send yet.
+- **Ports**: Postgres 5436, booth 3100, worker 3101, chosen to stay
+  clear of the other projects on this machine.
+- **The gallery is the event's site, not an app here.** There was an
+  `apps/gallery` stub and a plan for R2 plus a gallery on Coolify; it
+  went when the wedding-planner's album turned out to be where guests'
+  own photos go, and one album beats two. The booth's end is generic
+  (see **The gallery**), so a friend's party can point it anywhere that
+  speaks the same POST, or nowhere.
 - **The kiosk can run on the internet.** `docker-compose.coolify.yml`
   deploys Postgres, the worker and the booth app to Coolify as one
   resource, and the iPad opens its domain; Coolify's certificate means
   no private CA. `apps/booth/Dockerfile` and `packages/worker/Dockerfile`
-  build from the repo root like the gallery's, share a `/data` volume as
-  the same `node` user, and the worker applies migrations before the
-  seed so a fresh database needs no manual step. The camera there is
+  build from the repo root (`.dockerignore` keeps data, certs and `.env`
+  out; the app's image copies the traced `standalone` server into a
+  `node:24-alpine` runner that binds `::` so a health check against
+  `localhost` works whether that resolves to IPv4 or IPv6), share a
+  `/data` volume as the same `node` user, and the worker applies
+  migrations before the seed so a fresh database needs no manual step. The camera there is
   the iPad's (no USB), the printer is fake, and anyone with the URL
   reaches the kiosk; `/admin` stays behind the password. Pages that
   read runtime secrets must be dynamic, because the image is built
@@ -216,7 +255,8 @@ compositor produces the print and web JPEGs from the same geometry and
   draw. The seed records every file it loads in `seeded_templates`, so
   a deleted or renamed seed layout does not come back on the next start.
 - **Reprint** is a plain `print` job with `reprint: true`; it does not
-  touch the session's phase.
+  touch the session's phase. **Send again** (`/api/admin/sessions/{id}/sync`)
+  is a plain `sync` job the same way.
 - **Filters are a look on the session, not on the files.** The guest
   picks one on the review screen, comparing the looks on their own
   photos; the chips are the first shot through each. The tap is a
@@ -244,7 +284,7 @@ compositor produces the print and web JPEGs from the same geometry and
 2. **Compositor** - sharp behind the template loader; print and web JPEGs for any slot count.
 3. **Real camera** - `GPhoto2Camera`, MJPEG liveview, the stop-shoot-restart cycle, USB reconnect.
 4. **Printing** - CUPS (driverless IPP first, Gutenprint second), the queue, the paper counter.
-5. **Uploads, gallery, QR** - R2 through the jobs queue with retries, `apps/gallery` on Coolify, the all-photos page.
+5. **Gallery and QR** - done, ahead of order, as the push to the event's site (see **The gallery**) and the wedding-planner's `/api/booth/photos` and `/i/booth/{id}`; it goes live the moment phase 2 fills `webPath`.
 6. **Hardening** - systemd, a watchdog, recovery after a power cut, the 4-hour soak test.
 7. **Polish** - sounds, retake (modelled already, not on the review screen yet), final artwork, whatever the hallway tests turn up.
 

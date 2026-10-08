@@ -1,5 +1,6 @@
 export * from "./camera";
 export * from "./filters";
+export * from "./gallery";
 export * from "./kiosk-capture";
 export * from "./print";
 export * from "./session";

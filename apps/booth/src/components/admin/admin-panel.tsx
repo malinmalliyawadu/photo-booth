@@ -478,15 +478,26 @@ function SessionRow({
         {s.phase === "failed" && s.reason && <p className="text-xs text-rose">{s.reason}</p>}
       </div>
       {!live && complete && (
-        <button
-          type="button"
-          className="btn min-h-9 px-2"
-          aria-label="Print again"
-          onClick={() => onAction("Reprint", () => post(`/api/admin/sessions/${s.id}/reprint`))}
-          data-testid="reprint"
-        >
-          <Printer className="h-4 w-4" />
-        </button>
+        <>
+          <button
+            type="button"
+            className="btn min-h-9 px-2"
+            aria-label="Print again"
+            onClick={() => onAction("Reprint", () => post(`/api/admin/sessions/${s.id}/reprint`))}
+            data-testid="reprint"
+          >
+            <Printer className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="btn min-h-9 px-2"
+            aria-label="Send to the gallery again"
+            onClick={() => onAction("Send to the gallery", () => post(`/api/admin/sessions/${s.id}/sync`))}
+            data-testid="resync"
+          >
+            <Upload className="h-4 w-4" />
+          </button>
+        </>
       )}
       <button
         type="button"

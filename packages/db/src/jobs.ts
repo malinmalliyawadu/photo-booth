@@ -3,6 +3,14 @@ import type { Effect } from "@booth/core";
 import type { Db, Tx } from "./client";
 import { jobs, type JobRow } from "./schema";
 
+/**
+ * How many goes an upload gets. The backoff doubles from a second, so
+ * twelve attempts spread over about an hour: long enough for the venue's
+ * connection to come back, short enough that the attendant's "send
+ * again" is still the answer to anything worse.
+ */
+export const SYNC_ATTEMPTS = 12;
+
 /** Turns the state machine's effects into rows the worker will pick up. */
 export async function enqueueEffects(tx: Tx, sessionId: string, effects: Effect[], now: Date): Promise<void> {
   if (effects.length === 0) return;
@@ -16,8 +24,9 @@ export async function enqueueEffects(tx: Tx, sessionId: string, effects: Effect[
         case "timeout":
           return { kind: e.kind, sessionId, payload: { phase: e.phase, shot: e.shot }, runAt: e.at };
         case "compose":
-        case "sync":
           return { kind: e.kind, sessionId, payload: {}, runAt: now };
+        case "sync":
+          return { kind: e.kind, sessionId, payload: {}, runAt: now, maxAttempts: SYNC_ATTEMPTS };
         case "print":
           return { kind: e.kind, sessionId, payload: {}, runAt: now, maxAttempts: 1 };
       }
