@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import {
   ACTIVE_PHASES,
   beginSession,
@@ -111,12 +111,37 @@ export async function applySessionEvent(
   event: SessionEvent,
   now = new Date(),
 ): Promise<Transition & { row: SessionRow }> {
-  return db.transaction(async (tx) => {
+  return applyWith(id, event, now);
+}
+
+/**
+ * applySessionEvent, plus `alongside`: writes that belong to the event
+ * and must commit only if the session accepts it. It returns the stored
+ * files it replaced, which are removed once the transaction commits.
+ */
+async function applyWith(
+  id: string,
+  event: SessionEvent,
+  now: Date,
+  alongside?: (tx: Tx) => Promise<string[]>,
+): Promise<Transition & { row: SessionRow }> {
+  const discarded: string[] = [];
+  const applied = await db.transaction(async (tx) => {
     const [row] = await tx.select().from(sessions).where(eq(sessions.id, id)).for("update");
     if (!row || row.deletedAt) throw new SessionError("No such session", 404);
     const result = transition(rowToState(row), event, now);
     if (!result.ok) return { ...result, row };
     if (result.stale) return { ...result, row };
+    // A retake starts the photos over. The old ones go in the same
+    // commit, so no screen shows them while the new ones are taken.
+    if (result.state.takenCount < row.takenCount) {
+      const gone = await tx
+        .delete(shots)
+        .where(and(eq(shots.sessionId, id), gt(shots.shot, result.state.takenCount)))
+        .returning({ path: shots.path });
+      discarded.push(...gone.map((s) => s.path));
+    }
+    if (alongside) discarded.push(...(await alongside(tx)));
     const [updated] = await tx
       .update(sessions)
       .set(stateToColumns(result.state))
@@ -126,6 +151,13 @@ export async function applySessionEvent(
     await notify(tx);
     return { ...result, row: updated! };
   });
+  await removeAll(discarded);
+  return applied;
+}
+
+/** Files nothing points at any more. A failure leaves litter, not a broken session. */
+async function removeAll(paths: string[]): Promise<void> {
+  await Promise.all(paths.map((p) => removeData(p).catch(() => undefined)));
 }
 
 /** Same as applySessionEvent but a refusal throws, for route handlers. */
@@ -135,13 +167,40 @@ export async function commandSession(id: string, event: SessionEvent): Promise<S
   return result.row;
 }
 
-/** A shot landed on disk: record it, then let the state machine move on. */
+/**
+ * A shot landed on disk at `path` (a fresh `sessionPaths.shot`). It is
+ * recorded only if the session is still waiting for it; a late frame
+ * from an attempt the session gave up on is removed instead, so it can
+ * never stand in for the photo that replaced it.
+ */
 export async function recordShot(id: string, shot: number, path: string): Promise<Transition & { row: SessionRow }> {
-  await db
-    .insert(shots)
-    .values({ sessionId: id, shot, path })
-    .onConflictDoUpdate({ target: [shots.sessionId, shots.shot], set: { path, takenAt: new Date() } });
-  return applySessionEvent(id, { type: "shot_taken", shot });
+  let recorded = false;
+  const result = await applyWith(id, { type: "shot_taken", shot }, new Date(), async (tx) => {
+    recorded = true;
+    const [before] = await tx
+      .select({ path: shots.path })
+      .from(shots)
+      .where(and(eq(shots.sessionId, id), eq(shots.shot, shot)));
+    await tx
+      .insert(shots)
+      .values({ sessionId: id, shot, path })
+      .onConflictDoUpdate({ target: [shots.sessionId, shots.shot], set: { path, takenAt: new Date() } });
+    return before && before.path !== path ? [before.path] : [];
+  }).catch(async (err: unknown) => {
+    await removeAll([path]);
+    throw err;
+  });
+  if (!recorded) await removeAll([path]);
+  return result;
+}
+
+/** Where one of a session's shots is stored, or null before it is taken. */
+export async function shotPath(id: string, shot: number): Promise<string | null> {
+  const [row] = await db
+    .select({ path: shots.path })
+    .from(shots)
+    .where(and(eq(shots.sessionId, id), eq(shots.shot, shot)));
+  return row?.path ?? null;
 }
 
 export async function setComposite(

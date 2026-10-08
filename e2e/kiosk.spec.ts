@@ -6,6 +6,10 @@ test.beforeEach(async ({ request }) => {
   await resetBooth(request);
 });
 
+test.afterAll(async ({ request }) => {
+  await resetBooth(request);
+});
+
 test("a guest walks the booth from tap to QR", async ({ page, request }) => {
   await page.goto("/");
   await expect(page.getByTestId("attract")).toBeVisible();

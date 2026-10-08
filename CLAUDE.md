@@ -53,6 +53,7 @@ between a change in `core` and the app seeing it.
 - **Nothing in the kiosk needs the internet.** Fonts are files in the repo; the QR is made on the controller; the gallery link works once the sync catches up.
 - **`/admin` and `/api/admin` stay behind the password.** Anybody on the booth Wi-Fi can reach the controller, and admin can delete sessions and see every photo. `src/proxy.ts` is the gate; `ADMIN_PASSWORD` unset means nobody signs in.
 - **Stored paths are relative to the data directory** (`BOOTH_DATA_DIR`), so the directory can move or be restored without touching a row. `resolveData` refuses anything that escapes it.
+- **A stored file is never overwritten.** `/media` serves everything as immutable, so `sessionPaths` names a new file on every call (a retake, a recompose) and the row is how it is found again. Reusing a name shows the guest the old photo from Safari's cache.
 
 ## The session state machine (`packages/core/src/session.ts`)
 

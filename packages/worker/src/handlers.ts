@@ -11,6 +11,7 @@ import {
   recordShot,
   resolveData,
   sessionPaths,
+  shotPath,
   type JobRow,
 } from "@booth/db";
 import type { Printer } from "./printer";
@@ -92,7 +93,8 @@ const print: Handler = async (job, services) => {
   try {
     // Until the compositor lands there is no print file; the fake
     // printer does not mind being handed the first shot.
-    const file = session.compositePath ?? sessionPaths.shot(id, 1);
+    const file = session.compositePath ?? (await shotPath(id, 1));
+    if (!file) throw new Error("the session has no photo to print");
     await services.printer.print(resolveData(file));
     await consumePaper(db);
     await countPrint(id);

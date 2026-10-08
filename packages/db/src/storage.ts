@@ -4,6 +4,7 @@
  * directory can move (or be restored from the night-of backup) without
  * touching a row.
  */
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
@@ -41,13 +42,24 @@ export function resolveData(relative: string): string {
   return abs;
 }
 
+/**
+ * Where a session's files go. `/media` tells browsers a file never
+ * changes, so a file is never written twice: every call but `dir` names
+ * a new file, and the row it is stored on is how it is found again. A
+ * retake that reused `shot-1.jpg` would show the guest their first
+ * photo, straight from Safari's cache.
+ */
 export const sessionPaths = {
   dir: (id: string) => `sessions/${id}`,
-  shot: (id: string, shot: number) => `sessions/${id}/shot-${shot}.jpg`,
-  composite: (id: string) => `sessions/${id}/print.jpg`,
-  web: (id: string) => `sessions/${id}/web.jpg`,
-  thumb: (id: string) => `sessions/${id}/thumb.jpg`,
+  shot: (id: string, shot: number) => `sessions/${id}/shot-${shot}-${fresh()}.jpg`,
+  composite: (id: string) => `sessions/${id}/print-${fresh()}.jpg`,
+  web: (id: string) => `sessions/${id}/web-${fresh()}.jpg`,
+  thumb: (id: string) => `sessions/${id}/thumb-${fresh()}.jpg`,
 };
+
+function fresh(): string {
+  return randomBytes(4).toString("hex");
+}
 
 export const templatePaths = {
   png: (id: string) => `templates/${id}.png`,
