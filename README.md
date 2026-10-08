@@ -33,3 +33,21 @@ two slots share a shot:
 ```json
 { "shots": [1, 1, 2, 2, 3, 3] }
 ```
+
+## Using the iPad's own camera
+
+Set the camera to **iPad** on `/admin`. The kiosk then takes the photos
+with the iPad's front camera; no DSLR needed. Once per iPad:
+
+1. Install `ops/certs/ca.crt` (open `http://booth.local/ca.crt`), then
+   trust it in Settings › General › About › Certificate Trust Settings.
+   Safari only gives a page the camera over https. Not needed on the
+   Coolify deployment, whose certificate Safari already trusts.
+2. Open the kiosk in Safari, then aA › Website Settings › Camera ›
+   **Allow**, so Safari never asks mid-countdown.
+3. Turn the brightness up and Auto-Lock off; the white screen is the flash.
+4. Stand the iPad in landscape and start Guided Access.
+
+The camera card on `/admin` shows what the iPad reports: the camera and
+its resolution, a warning if it is interrupted or too small for a sharp
+print, and "Not heard from the iPad" if the kiosk is closed.

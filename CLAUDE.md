@@ -21,7 +21,7 @@ Vitest for pure modules, Playwright for the kiosk's happy path.
 | `apps/booth` | Next.js: kiosk (`/`), admin (`/admin`), slideshow (`/slideshow`), the session API, the SSE stream, `/media` | The controller, or Coolify |
 | `apps/gallery` | Next.js: one page per session, the all-photos page, the sync endpoint (phase 5; a stub today); `Dockerfile` builds it from the repo root | Coolify |
 | `packages/worker` | Node process: camera, compositor, print queue, cloud sync, the jobs loop | The controller, or Coolify |
-| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants, the `Camera` interface | Both apps and the worker |
+| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants, the `Camera` interface, the iPad capture plan and viewfinder crop | Both apps and the worker |
 | `packages/db` | Drizzle schema + migrations, the repositories, the data directory, the snapshot | Both apps and the worker |
 | `templates/` | Layout PNGs and optional JSON sidecars; the seed loads them | Uploaded through admin on the night |
 | `ops/` | `ca.sh` (local certificate authority), `Caddyfile`; systemd units and the soak test arrive in phase 6 | The controller |
@@ -91,11 +91,33 @@ interface Camera {
 
 gphoto2 cannot stream liveview and capture a still from two processes,
 so `shoot` owns the whole stop-fire-restart cycle and the kiosk shows
-"Hold still" from the moment the digits reach zero. The **iPad camera is
-not a `Camera`**: in `ipad` mode the kiosk captures through getUserMedia
-and PUTs the frame to `/api/sessions/{id}/shots/{n}`; the worker's
-capture job only logs that it is waiting, and the capturing timeout
-retries if nothing arrives. `FakeCamera` returns the sample photos.
+"Hold still" from the moment the digits reach zero. `FakeCamera`
+returns the sample photos.
+
+## The iPad camera
+
+The **iPad camera is not a `Camera`**: in `ipad` mode the kiosk is the
+camera and the worker's capture job only logs that it is waiting.
+
+- `useIpadCamera` holds the front camera open for as long as the booth
+  is in iPad mode (not just while posing), so exposure and focus have
+  settled and any permission prompt has come and gone before a guest taps. It asks for far
+  more than the camera has, so Safari picks its largest mode; it
+  reopens a track that ends and reports health to `PUT /api/kiosk/camera`
+  every 5 s. In iPad mode the worker leaves the `camera` component alone.
+- `planCapture` (`packages/core/src/kiosk-capture.ts`) decides when: the
+  frame is taken at the kiosk's own zero (white screen as the flash for
+  250 ms, then the read) and held until the snapshot says `capturing`,
+  then PUT to `/api/sessions/{id}/shots/{n}`. A frame that cannot be
+  read is POSTed to `.../shots/{n}/failed` at once, so the state machine
+  retries without waiting out the capturing timeout.
+- The photo is the camera's full, unmirrored frame. The preview is
+  mirrored with CSS only.
+
+**What guests see is what the layout keeps.** `viewfinderCrop`
+(`packages/core/src/viewfinder.ts`) crops the live preview, in every
+camera mode, to the centred cover crop of the slot(s) the shot fills,
+which is how `Composite` (and phase 2's compositor) crops the photo.
 
 ## How a screen works
 

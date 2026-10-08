@@ -1,14 +1,16 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useEffect, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { Camera, Check, Printer, RotateCcw, X } from "lucide-react";
 import { spellShortId } from "@booth/core";
 import type { CameraMode } from "@booth/core";
 import type { SessionView, TemplateSummary } from "@booth/db";
 import { Composite, samplePhotos, sessionPhotos } from "@/components/composite";
 import { useCountdown } from "./countdown";
-import { IpadCamera } from "./ipad-camera";
+import type { IpadCamera } from "./use-ipad-camera";
+import { useIpadCapture } from "./use-ipad-capture";
+import { Viewfinder } from "./viewfinder";
 
 const PREVIEW_STREAM_URL = "/preview/stream";
 
@@ -138,35 +140,57 @@ export function LiveScreen({
   session,
   template,
   cameraMode,
+  camera,
   onCancel,
 }: {
   session: SessionView;
   template: TemplateSummary;
   cameraMode: CameraMode;
+  camera: IpadCamera;
   onCancel: () => void;
 }) {
   const left = useCountdown(session.phase === "countdown" ? session.countdownEndsAt : null);
-  // "Hold still" from the moment the digits hit zero: the worker fires a
-  // beat later and the guest should already be frozen for it.
+  // "Hold still" from the moment the digits hit zero: the camera fires
+  // then (the iPad) or a beat later (the worker), and the guest should
+  // already be frozen for it.
   const capturing = session.phase === "capturing" || (session.phase === "countdown" && left === 0);
-  const [cameraError, setCameraError] = useState<string | null>(null);
+  const ipad = cameraMode === "ipad";
+  const video = useRef<HTMLVideoElement>(null);
+  const { flash, error: captureError } = useIpadCapture(ipad, session, video);
+  const [frame, setFrame] = useState<{ width: number; height: number } | null>(null);
   const photos = sessionPhotos(session.shots);
   const freshShot = session.shots.at(-1);
+  const cameraError = ipad ? (captureError ?? (camera.health.status === "error" ? camera.health.detail : null)) : null;
 
   return (
     <div className="relative flex h-dvh flex-col overflow-hidden" data-testid="live" data-phase={session.phase}>
       <div className="absolute inset-0">
-        {cameraMode === "ipad" ? (
-          <IpadCamera sessionId={session.id} capturingShot={capturing ? session.shot : null} onError={setCameraError} />
-        ) : cameraMode === "gphoto2" ? (
-          <img src={PREVIEW_STREAM_URL} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <FakeViewfinder />
-        )}
-        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(15,17,19,0.55)_0%,rgba(15,17,19,0)_30%,rgba(15,17,19,0)_60%,rgba(15,17,19,0.75)_100%)]" />
+        <Viewfinder frame={frame ?? (ipad ? IPAD_FRAME : DSLR_FRAME)} slots={template.slots} shot={session.shot}>
+          {ipad ? (
+            <LiveVideo stream={camera.stream} videoRef={video} onFrame={setFrame} />
+          ) : cameraMode === "gphoto2" ? (
+            <img
+              src={PREVIEW_STREAM_URL}
+              alt=""
+              className="h-full w-full object-cover"
+              onLoad={(e) => setFrame({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
+            />
+          ) : (
+            <FakeViewfinder />
+          )}
+        </Viewfinder>
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(15,17,19,0.55)_0%,rgba(15,17,19,0)_30%,rgba(15,17,19,0)_60%,rgba(15,17,19,0.75)_100%)]" />
       </div>
 
-      {session.phase === "capturing" && <div key={`flash-${session.shot}`} className="pointer-events-none absolute inset-0 z-20 animate-flash bg-cream" />}
+      {ipad ? (
+        flash.state === "on" ? (
+          <div className="pointer-events-none absolute inset-0 z-20 bg-white" data-testid="flash" />
+        ) : flash.state === "fading" ? (
+          <div key={`flash-${flash.count}`} className="pointer-events-none absolute inset-0 z-20 animate-flash bg-white" />
+        ) : null
+      ) : (
+        session.phase === "capturing" && <div key={`flash-${session.shot}`} className="pointer-events-none absolute inset-0 z-20 animate-flash bg-cream" />
+      )}
 
       <header className="relative z-10 flex items-start justify-between px-10 pt-8">
         <div>
@@ -203,10 +227,51 @@ export function LiveScreen({
             </div>
           ))}
         </div>
-        {cameraError && <p className="max-w-md rounded-xl bg-rose-tint px-4 py-2 text-rose">{cameraError}</p>}
+        {cameraError && (
+          <p className="max-w-md rounded-xl bg-rose-tint px-4 py-2 text-rose" role="alert" data-testid="camera-error">
+            {cameraError}
+          </p>
+        )}
       </footer>
     </div>
   );
+}
+
+/** Stand-ins for the camera frame's shape until the camera reports it. */
+const IPAD_FRAME = { width: 4, height: 3 };
+const DSLR_FRAME = { width: 3, height: 2 };
+
+/**
+ * The front camera, mirrored so guests see themselves as in a mirror.
+ * Reports the frame size, which changes when the iPad is rotated.
+ */
+function LiveVideo({
+  stream,
+  videoRef,
+  onFrame,
+}: {
+  stream: MediaStream | null;
+  videoRef: Ref<HTMLVideoElement>;
+  onFrame: (frame: { width: number; height: number }) => void;
+}) {
+  const own = useRef<HTMLVideoElement>(null);
+  useImperativeHandle(videoRef, () => own.current!, []);
+  useEffect(() => {
+    const v = own.current;
+    if (!v) return;
+    if (v.srcObject !== stream) v.srcObject = stream;
+    const report = () => {
+      if (v.videoWidth > 0) onFrame({ width: v.videoWidth, height: v.videoHeight });
+    };
+    report();
+    v.addEventListener("loadedmetadata", report);
+    v.addEventListener("resize", report);
+    return () => {
+      v.removeEventListener("loadedmetadata", report);
+      v.removeEventListener("resize", report);
+    };
+  }, [stream, onFrame]);
+  return <video ref={own} autoPlay playsInline muted className="h-full w-full object-cover" style={{ transform: "scaleX(-1)" }} />;
 }
 
 /** Stands in for the live preview when the fake camera is in use. */

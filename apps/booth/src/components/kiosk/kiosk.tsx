@@ -14,6 +14,7 @@ import {
   PickerScreen,
   ReviewScreen,
 } from "./screens";
+import { useIpadCamera } from "./use-ipad-camera";
 
 /**
  * The guest-facing screen. Which screen shows is a function of the
@@ -30,6 +31,9 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   const [dismissed, setDismissed] = useState<string | null>(null);
 
   const { session, booth, templates } = snapshot;
+  // Open for as long as the booth is in iPad mode, not just while a
+  // guest is posing: see useIpadCamera.
+  const camera = useIpadCamera(booth.cameraMode === "ipad");
 
   // Remember which session this screen is on. When it leaves the active
   // phases as a failure, explain before the attract loop comes back.
@@ -84,7 +88,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
     switch (session.phase) {
       case "countdown":
       case "capturing":
-        screen = <LiveScreen session={session} template={template} cameraMode={booth.cameraMode} onCancel={() => command(url("cancel"))} />;
+        screen = <LiveScreen session={session} template={template} cameraMode={booth.cameraMode} camera={camera} onCancel={() => command(url("cancel"))} />;
         break;
       case "composing":
         screen = <ComposingScreen />;

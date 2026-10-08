@@ -57,7 +57,13 @@ export function AdminPanel({ initial }: { initial: Snapshot }) {
         <Section title="Now" eyebrow="Status">
           <div className="grid grid-cols-2 gap-2" data-testid="components">
             {(["worker", "camera", "printer", "sync"] as ComponentName[]).map((name) => (
-              <ComponentCard key={name} name={name} value={components[name]} now={snapshot.at} />
+              <ComponentCard
+                key={name}
+                name={name}
+                value={components[name]}
+                now={snapshot.at}
+                reporter={name === "camera" && booth.cameraMode === "ipad" ? "the iPad" : "the worker"}
+              />
             ))}
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-cream-soft">
@@ -238,10 +244,13 @@ function ComponentCard({
   name,
   value,
   now,
+  reporter,
 }: {
   name: ComponentName;
   value: Snapshot["components"][ComponentName];
   now: string;
+  /** Who writes this component's health, for the stale message. */
+  reporter: string;
 }) {
   const stale = value && new Date(now).getTime() - new Date(value.seenAt).getTime() > STALE_MS;
   const status = !value ? "off" : stale ? "error" : value.status;
@@ -255,7 +264,7 @@ function ComponentCard({
         </span>
         <span className={`pill pill-${status}`}>{status}</span>
       </div>
-      <p className="mt-1 text-xs leading-snug text-cream-soft">{stale ? "Not heard from the worker" : (value?.detail ?? "Not started")}</p>
+      <p className="mt-1 text-xs leading-snug text-cream-soft">{stale ? `Not heard from ${reporter}` : (value?.detail ?? "Not started")}</p>
       {value && <p className="mono mt-1 text-[11px] text-cream-faint">{timeAgo(value.seenAt, new Date(now).getTime())}</p>}
     </div>
   );

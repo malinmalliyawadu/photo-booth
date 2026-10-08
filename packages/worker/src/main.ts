@@ -62,10 +62,12 @@ class CameraManager {
     }
   }
 
-  status(): { status: "ok" | "warn" | "error" | "off"; detail: string } {
+  /** Null in iPad mode: the kiosk reports that camera's health itself. */
+  status(): { status: "ok" | "warn" | "error" | "off"; detail: string } | null {
     if (!this.current) return { status: "off", detail: "Not started" };
     if (this.lastError) return { status: "error", detail: this.lastError };
-    if (!this.current.camera) return { status: "warn", detail: "iPad camera: the kiosk captures" };
+    if (this.current.mode === "ipad") return null;
+    if (!this.current.camera) return { status: "off", detail: "No camera" };
     const s = this.current.camera.status();
     return { status: s.ok ? "ok" : "error", detail: s.detail };
   }
@@ -87,7 +89,7 @@ async function main() {
   const services: Services = { camera: (mode) => cameras.for(mode), printer, log };
 
   const startedAt = new Date();
-  const http = startHttp(HTTP_PORT, () => ({ worker: WORKER_ID, since: startedAt.toISOString(), camera: cameras.status() }));
+  const http = startHttp(HTTP_PORT, () => ({ worker: WORKER_ID, since: startedAt.toISOString(), camera: cameras.status() ?? { status: "kiosk", detail: "The iPad reports its own camera" } }));
 
   const requeued = await requeueStaleJobs(db, 0);
   if (requeued) log(`re-queued ${requeued} job(s) left running by a previous worker`);
@@ -125,7 +127,7 @@ async function main() {
       const prn = await printer.status();
       await Promise.all([
         reportComponent(db, "worker", "ok", `Running on ${hostname()}`),
-        reportComponent(db, "camera", cam.status, cam.detail),
+        cam && reportComponent(db, "camera", cam.status, cam.detail),
         reportComponent(db, "printer", prn.ok ? "ok" : "error", prn.detail),
         reportComponent(db, "sync", "warn", "Fake sync: nothing is uploaded until phase 5"),
       ]);

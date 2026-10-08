@@ -8,8 +8,8 @@
  * zero on the countdown, and the gap reads as the flash.
  *
  * The iPad camera is not a `Camera`: in that mode the kiosk captures
- * through getUserMedia and uploads the frame, and the worker's capture
- * job only arms a timeout. See the session state machine.
+ * through getUserMedia and uploads the frame (see `kiosk-capture.ts`),
+ * and the worker's capture job only logs that it is waiting.
  */
 export type CameraMode = "fake" | "gphoto2" | "ipad";
 
