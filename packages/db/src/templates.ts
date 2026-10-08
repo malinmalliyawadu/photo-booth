@@ -50,6 +50,9 @@ export async function ingestTemplate(input: {
   }
 
   const warnings = [...detected.warnings];
+  if (input.sidecar?.texts?.length) {
+    warnings.push("The sidecar's text fields are not drawn yet: put the words in the design itself");
+  }
   const expected = [PRINT_PX, { width: PRINT_PX.height, height: PRINT_PX.width }];
   if (!expected.some((e) => e.width === width && e.height === height)) {
     warnings.push(
@@ -95,6 +98,11 @@ export async function ingestTemplate(input: {
     await notify(tx);
     return row!;
   });
+}
+
+/** One layout, deleted or not: a session taken with a retired layout still composes with it. */
+export async function getTemplate(id: string, dbOrTx: Db = db): Promise<TemplateRow | null> {
+  return (await dbOrTx.query.templates.findFirst({ where: eq(templates.id, id) })) ?? null;
 }
 
 /** Deleted layouts included: the sessions taken with one still draw it. */

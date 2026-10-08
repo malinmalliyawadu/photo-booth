@@ -46,7 +46,7 @@ describe("gallerySetting", () => {
 
 describe("planSync", () => {
   const on: GallerySetting = { kind: "on", url: "https://w.example/api/booth/photos", token: "t", host: "w.example" };
-  const composed = { deletedAt: null, webPath: "sessions/x/web-1.jpg", thumbPath: "sessions/x/thumb-1.jpg" };
+  const composed = { deletedAt: null, webPath: "sessions/x/web-1.jpg", thumbPath: "sessions/x/thumb-1.jpg", takenCount: 4, shotCount: 4 };
 
   it("uploads the web photo and thumbnail of a composed session", () => {
     expect(planSync(on, composed)).toEqual({ kind: "upload", photo: composed.webPath, thumb: composed.thumbPath });
@@ -65,8 +65,16 @@ describe("planSync", () => {
     expect(planSync({ kind: "invalid", detail: "bad" }, composed)).toEqual({ kind: "fail", reason: "bad" });
   });
 
-  it("fails rather than sending the raw shots when there is no web photo yet", () => {
-    expect(planSync(on, { ...composed, webPath: null })).toMatchObject({ kind: "fail", reason: expect.stringContaining("compositor") });
-    expect(planSync(on, { ...composed, thumbPath: null })).toMatchObject({ kind: "fail" });
+  it("composes first, rather than sending the raw shots, when there is no web photo yet", () => {
+    expect(planSync(on, { ...composed, webPath: null })).toEqual({ kind: "compose" });
+    expect(planSync(on, { ...composed, thumbPath: null })).toEqual({ kind: "compose" });
+  });
+
+  it("fails when there are not the photos to compose", () => {
+    expect(planSync(on, { ...composed, webPath: null, takenCount: 3 })).toMatchObject({ kind: "fail", reason: expect.stringContaining("no photos") });
+  });
+
+  it("does not compose for a gallery that is off", () => {
+    expect(planSync({ kind: "off" }, { ...composed, webPath: null })).toMatchObject({ kind: "skip" });
   });
 });

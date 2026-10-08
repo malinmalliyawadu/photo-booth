@@ -102,7 +102,10 @@ export const sessions = pgTable(
     countdownEndsAt: timestamptz("countdown_ends_at"),
     print: text("print").$type<PrintStatus>(),
     reason: text("reason"),
-    /** Relative to the data directory. Null until the compositor has run. */
+    /**
+     * The compositor's postcard, web photo and thumbnail, relative to the
+     * data directory. Null until the guest accepts and it has run.
+     */
     compositePath: text("composite_path"),
     webPath: text("web_path"),
     thumbPath: text("thumb_path"),

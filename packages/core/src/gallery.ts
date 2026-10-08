@@ -63,6 +63,12 @@ export type SyncPlan =
   | { kind: "skip"; reason: string }
   /** The job fails and the queue retries it with backoff. */
   | { kind: "fail"; reason: string }
+  /**
+   * The photos are all there but were never put together (a session
+   * from before the compositor, or one it failed on): compose, then plan
+   * again.
+   */
+  | { kind: "compose" }
   /** Relative data paths of the files to send. */
   | { kind: "upload"; photo: string; thumb: string };
 
@@ -74,13 +80,20 @@ export type SyncPlan =
  */
 export function planSync(
   gallery: GallerySetting,
-  session: { deletedAt: Date | null; webPath: string | null; thumbPath: string | null },
+  session: {
+    deletedAt: Date | null;
+    webPath: string | null;
+    thumbPath: string | null;
+    takenCount: number;
+    shotCount: number;
+  },
 ): SyncPlan {
   if (session.deletedAt) return { kind: "skip", reason: "the session was deleted" };
   if (gallery.kind === "off") return { kind: "skip", reason: "no gallery is configured" };
   if (gallery.kind === "invalid") return { kind: "fail", reason: gallery.detail };
   if (!session.webPath || !session.thumbPath) {
-    return { kind: "fail", reason: "the session has no web photo yet: the compositor has not produced one" };
+    if (session.takenCount < session.shotCount) return { kind: "fail", reason: "the session has no photos to send" };
+    return { kind: "compose" };
   }
   return { kind: "upload", photo: session.webPath, thumb: session.thumbPath };
 }
