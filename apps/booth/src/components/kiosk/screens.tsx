@@ -3,8 +3,8 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { Camera, Check, Printer, RotateCcw, X } from "lucide-react";
-import { spellShortId } from "@booth/core";
-import type { CameraMode } from "@booth/core";
+import { cssFilter, filterById, needsFilterChoice, spellShortId } from "@booth/core";
+import type { CameraMode, FilterId } from "@booth/core";
 import type { SessionView, TemplateSummary } from "@booth/db";
 import { Composite, samplePhotos, sessionPhotos } from "@/components/composite";
 import { useCountdown } from "./countdown";
@@ -80,7 +80,7 @@ export function AttractScreen({
               const t = byId.get(s.templateId);
               return t ? (
                 <div key={`${s.id}-${i}`} className="h-[36dvh]" style={{ width: `calc(36dvh * ${t.width / t.height})` }}>
-                  <Composite template={t} photos={sessionPhotos(s.shots)} className="rounded-xl" />
+                  <Composite template={t} photos={sessionPhotos(s.shots)} filter={s.filter} className="rounded-xl" />
                 </div>
               ) : null;
             })}
@@ -193,6 +193,7 @@ export function PickerScreen({
   );
 }
 
+
 export function LiveScreen({
   session,
   template,
@@ -218,23 +219,29 @@ export function LiveScreen({
   const photos = sessionPhotos(session.shots);
   const freshShot = session.shots.at(-1);
   const cameraError = ipad ? (captureError ?? (camera.health.status === "error" ? camera.health.detail : null)) : null;
+  // The guest poses through the filter they picked. It is CSS on the
+  // preview only: the frame the iPad reads from the video underneath is
+  // the camera's own, and the file stays that way.
+  const look = cssFilter(session.filter);
 
   return (
-    <div className="relative flex h-dvh flex-col overflow-hidden" data-testid="live" data-phase={session.phase}>
+    <div className="relative flex h-dvh flex-col overflow-hidden" data-testid="live" data-phase={session.phase} data-filter={session.filter}>
       <div className="absolute inset-0">
         <Viewfinder frame={frame ?? (ipad ? IPAD_FRAME : DSLR_FRAME)} slots={template.slots} shot={session.shot}>
-          {ipad ? (
-            <LiveVideo stream={camera.stream} videoRef={video} onFrame={setFrame} />
-          ) : cameraMode === "gphoto2" ? (
-            <img
-              src={PREVIEW_STREAM_URL}
-              alt=""
-              className="h-full w-full object-cover"
-              onLoad={(e) => setFrame({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
-            />
-          ) : (
-            <FakeViewfinder />
-          )}
+          <div className="h-full w-full" style={{ filter: look }} data-testid="viewfinder-look">
+            {ipad ? (
+              <LiveVideo stream={camera.stream} videoRef={video} onFrame={setFrame} />
+            ) : cameraMode === "gphoto2" ? (
+              <img
+                src={PREVIEW_STREAM_URL}
+                alt=""
+                className="h-full w-full object-cover"
+                onLoad={(e) => setFrame({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
+              />
+            ) : (
+              <FakeViewfinder />
+            )}
+          </div>
         </Viewfinder>
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(15,17,19,0.55)_0%,rgba(15,17,19,0)_30%,rgba(15,17,19,0)_60%,rgba(15,17,19,0.75)_100%)]" />
       </div>
@@ -280,7 +287,7 @@ export function LiveScreen({
               key={n}
               className={`h-20 w-28 overflow-hidden rounded-lg bg-night-raised shadow-lg ring-1 ring-night-edge ${freshShot?.shot === n ? "animate-rise" : ""}`}
             >
-              {photos[n] ? <img src={photos[n]} alt="" className="h-full w-full object-cover" /> : null}
+              {photos[n] ? <img src={photos[n]} alt="" className="h-full w-full object-cover" style={{ filter: look }} /> : null}
             </div>
           ))}
         </div>
@@ -352,9 +359,17 @@ export function ComposingScreen() {
   );
 }
 
+/**
+ * The photos, through the filter the guest picks here. A tap shows at
+ * once on the composite and goes to the booth; the snapshot confirms it
+ * a moment later. The chips are the first photo through each look, so
+ * the comparison is on the guest's own face, not a sample.
+ */
 export function ReviewScreen({
   session,
   template,
+  filters,
+  onFilter,
   onAccept,
   onRetake,
   onCancel,
@@ -362,13 +377,20 @@ export function ReviewScreen({
 }: {
   session: SessionView;
   template: TemplateSummary;
+  /** What the booth offers; with one there is nothing to ask. */
+  filters: FilterId[];
+  onFilter: (id: FilterId) => void;
   onAccept: () => void;
   onRetake: () => void;
   onCancel: () => void;
   busy: boolean;
 }) {
+  const [chosen, setChosen] = useState<FilterId | null>(null);
+  if (chosen !== null && chosen === session.filter) setChosen(null);
+  const filter = chosen ?? session.filter;
+  const sample = session.shots[0]?.url;
   return (
-    <div className="flex h-dvh flex-col px-10 pt-safe-8 pb-safe-8" data-testid="review">
+    <div className="flex h-dvh flex-col px-10 pt-safe-8 pb-safe-8" data-testid="review" data-filter={filter}>
       <header className="flex items-end justify-between">
         <div className="animate-rise">
           <p className="eyebrow">Looking good</p>
@@ -379,8 +401,42 @@ export function ReviewScreen({
         </button>
       </header>
       <div className="my-6 min-h-0 flex-1 animate-rise">
-        <Composite template={template} photos={sessionPhotos(session.shots)} className="rounded-xl shadow-[0_40px_80px_-30px_rgba(0,0,0,0.9)]" fit />
+        <Composite
+          template={template}
+          photos={sessionPhotos(session.shots)}
+          filter={filter}
+          className="rounded-xl shadow-[0_40px_80px_-30px_rgba(0,0,0,0.9)]"
+          fit
+        />
       </div>
+      {needsFilterChoice(filters) && (
+        <div className="mb-6 flex animate-rise justify-center gap-3" role="radiogroup" aria-label="Filter" data-testid="filters" style={{ animationDelay: "120ms" }}>
+          {filters.map((id) => {
+            const selected = filter === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => {
+                  setChosen(id);
+                  onFilter(id);
+                }}
+                data-testid={`filter-${id}`}
+                className={`flex flex-col items-center gap-2 rounded-2xl p-2 pb-3 transition active:scale-[0.97] ${
+                  selected ? "bg-night-lifted shadow-[inset_0_0_0_2px_var(--color-ember)]" : "shadow-[inset_0_0_0_1px_var(--color-night-edge)]"
+                }`}
+              >
+                <div className="h-20 w-28 overflow-hidden rounded-xl bg-night-raised">
+                  {sample && <img src={sample} alt="" className="h-full w-full object-cover" style={{ filter: cssFilter(id) }} draggable={false} />}
+                </div>
+                <span className={`text-base font-semibold ${selected ? "text-cream" : "text-cream-soft"}`}>{filterById(id).name}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       <footer className="flex items-center justify-center gap-5">
         <button type="button" onClick={onRetake} className="tap tap-quiet" disabled={busy}>
           <RotateCcw className="h-7 w-7" /> Retake
@@ -413,14 +469,20 @@ export function DeliverScreen({
       </header>
       <div className="my-6 grid min-h-0 flex-1 grid-cols-[1.2fr_1fr] items-center gap-10">
         <div className="h-full min-h-0">
-          <Composite template={template} photos={sessionPhotos(session.shots)} className="rounded-xl shadow-[0_40px_80px_-30px_rgba(0,0,0,0.9)]" fit />
+          <Composite
+            template={template}
+            photos={sessionPhotos(session.shots)}
+            filter={session.filter}
+            className="rounded-xl shadow-[0_40px_80px_-30px_rgba(0,0,0,0.9)]"
+            fit
+          />
         </div>
         <div className="flex animate-rise flex-col items-center gap-5 text-center" style={{ animationDelay: "120ms" }}>
           <div className="rounded-3xl bg-cream p-5 shadow-2xl">
             <img src={`/api/sessions/${session.id}/qr`} alt="QR code for your photos" className="h-[34dvh] w-[34dvh]" data-testid="qr" />
           </div>
           <p className="mono text-lg tracking-[0.15em] text-cream-soft">{spellShortId(session.id)}</p>
-          <p className="text-xl text-cream-soft">Photos appear in the gallery shortly, even if the Wi-Fi is slow tonight.</p>
+          <p className="text-xl text-cream-soft">Your photos will be in the gallery in a moment.</p>
           <p className={`flex items-center gap-2 text-xl ${print.tone}`} data-testid="print-status">
             {print.icon}
             {print.text}

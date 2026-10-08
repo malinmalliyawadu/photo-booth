@@ -246,3 +246,39 @@ describe("timeouts move a stalled session along", () => {
     expect(retake.state.takenCount).toBe(0);
   });
 });
+
+describe("filter_chosen", () => {
+  function reviewing() {
+    let { state } = start(1);
+    state = step(state, { type: "countdown_elapsed", shot: 1 }).state;
+    state = step(state, { type: "shot_taken", shot: 1 }).state;
+    return step(state, { type: "composed" }).state;
+  }
+
+  it("starts in the camera's colours unless told otherwise", () => {
+    expect(start().state.filter).toBe("colour");
+    expect(beginSession({ shotCount: 1, countdownSeconds: 5, filter: "mono" }, T0).state.filter).toBe("mono");
+  });
+
+  it("changes the look on the review screen, as often as the guest likes, with nothing to do", () => {
+    const state = reviewing();
+    const once = step(state, { type: "filter_chosen", filter: "mono" });
+    expect(once.state.filter).toBe("mono");
+    expect(once.state.phase).toBe("review");
+    expect(once.effects).toEqual([]);
+    expect(step(once.state, { type: "filter_chosen", filter: "pop" }).state.filter).toBe("pop");
+  });
+
+  it("is refused anywhere else", () => {
+    const { state } = start();
+    expect(transition(state, { type: "filter_chosen", filter: "mono" }, T0)).toMatchObject({ ok: false });
+    const delivering = step(reviewing(), { type: "accepted" }).state;
+    expect(transition(delivering, { type: "filter_chosen", filter: "mono" }, T0)).toMatchObject({ ok: false });
+  });
+
+  it("survives a retake and the rest of the session", () => {
+    const chosen = step(reviewing(), { type: "filter_chosen", filter: "vintage" }).state;
+    expect(step(chosen, { type: "retake" }).state.filter).toBe("vintage");
+    expect(step(chosen, { type: "accepted" }).state.filter).toBe("vintage");
+  });
+});

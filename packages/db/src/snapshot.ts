@@ -1,5 +1,5 @@
 import { desc, eq, inArray, isNull, and } from "drizzle-orm";
-import type { CameraMode, Phase, PrintStatus, Slot } from "@booth/core";
+import { offeredFilters, type CameraMode, type FilterId, type Phase, type PrintStatus, type Slot } from "@booth/core";
 import { db } from "./client";
 import { readBooth } from "./booth";
 import { queueCounts } from "./jobs";
@@ -23,6 +23,8 @@ export interface Snapshot {
     paperLeft: number;
     paperPackSize: number;
     lockedTemplateId: string | null;
+    /** The filters the kiosk offers, in the order it shows them. */
+    filters: FilterId[];
   };
   components: Record<ComponentName, { status: ComponentStatus; detail: string; seenAt: string } | undefined>;
   templates: TemplateSummary[];
@@ -53,6 +55,7 @@ export interface SessionView {
   id: string;
   number: number;
   templateId: string;
+  filter: FilterId;
   phase: Phase;
   shot: number;
   shotCount: number;
@@ -100,6 +103,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     id: row.id,
     number: row.number,
     templateId: row.templateId,
+    filter: row.filter,
     phase: row.phase,
     shot: row.shot,
     shotCount: row.shotCount,
@@ -134,6 +138,7 @@ export async function readSnapshot(): Promise<Snapshot> {
       paperLeft: settings.paperLeft,
       paperPackSize: settings.paperPackSize,
       lockedTemplateId: settings.lockedTemplateId,
+      filters: offeredFilters(settings.filters),
     },
     components: componentMap,
     templates: templateRows.map((t) => ({
@@ -166,6 +171,7 @@ export async function readSessionView(id: string): Promise<SessionView | null> {
     id: row.id,
     number: row.number,
     templateId: row.templateId,
+    filter: row.filter,
     phase: row.phase,
     shot: row.shot,
     shotCount: row.shotCount,

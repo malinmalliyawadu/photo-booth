@@ -1,22 +1,27 @@
 /* eslint-disable @next/next/no-img-element */
+import { cssFilter, type FilterId } from "@booth/core";
 import type { TemplateSummary } from "@booth/db";
 
 /**
  * A layout with photos in its slots, drawn by the browser: the photos
  * sit under the knocked-out template overlay at the slot rectangles,
  * scaled by percentage so one component serves a thumbnail and the
- * review screen alike. Phase 2's compositor makes the print from the
- * same geometry.
+ * review screen alike. The session's filter is applied to the photos
+ * here, never to the files. Phase 2's compositor makes the print from
+ * the same geometry and the same look.
  */
 export function Composite({
   template,
   photos,
+  filter = "colour",
   className = "",
   fit = false,
 }: {
   template: Pick<TemplateSummary, "width" | "height" | "slots" | "screenUrl" | "name">;
   /** Shot number to image URL. Missing shots render as an empty slot. */
   photos: Record<number, string | undefined>;
+  /** The look the guest picked; the overlay is never filtered. */
+  filter?: FilterId;
   className?: string;
   /**
    * Fill the parent like object-fit: contain. The parent must have a
@@ -28,6 +33,7 @@ export function Composite({
 }) {
   const { width, height, slots } = template;
   const ratio = width / height;
+  const look = cssFilter(filter);
   const box = (
     <div
       className={`relative overflow-hidden bg-night-lifted ${className}`}
@@ -50,7 +56,7 @@ export function Composite({
             }}
           >
             {url ? (
-              <img src={url} alt="" className="h-full w-full object-cover" draggable={false} />
+              <img src={url} alt="" className="h-full w-full object-cover" style={{ filter: look }} draggable={false} />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
                 <span className="mono text-cream-faint text-[1.2em]">{slot.shot}</span>

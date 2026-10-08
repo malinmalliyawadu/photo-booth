@@ -1,6 +1,9 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 import type { Snapshot } from "@booth/db";
 
+/** The whole catalogue, as the booth offers it after a reset. */
+export const ALL_FILTERS = ["colour", "mono", "vintage", "faded", "pop"] as const;
+
 export async function snapshot(request: APIRequestContext): Promise<Snapshot> {
   const res = await request.get("/api/snapshot");
   expect(res.ok()).toBeTruthy();
@@ -33,6 +36,6 @@ export async function resetBooth(request: APIRequestContext): Promise<void> {
   const s = await snapshot(request);
   if (s.session) await request.post(`/api/sessions/${s.session.id}/cancel`);
   await request.patch("/api/admin/booth", {
-    data: { paused: false, cameraMode: "fake", countdownSeconds: 1, lockedTemplateId: null, paperLeft: 36 },
+    data: { paused: false, cameraMode: "fake", countdownSeconds: 1, lockedTemplateId: null, paperLeft: 36, filters: [...ALL_FILTERS] },
   });
 }

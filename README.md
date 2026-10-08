@@ -1,7 +1,7 @@
 # Photo booth
 
-Tap the iPad, pick a layout, pose, print, scan. Runs on a mini PC at the
-venue with no internet; the gallery catches up later.
+Tap the iPad, pick a layout and a filter, pose, print, scan. Runs on a
+mini PC at the venue or on Coolify; the gallery is online.
 
 See `CLAUDE.md` for the architecture, the state machine and the decisions.
 
@@ -33,6 +33,14 @@ two slots share a shot:
 ```json
 { "shots": [1, 1, 2, 2, 3, 3] }
 ```
+
+## Filters
+
+On the review screen a guest picks a filter for their photos: colour,
+black & white, vintage, faded or pop. The photos on disk stay as the
+camera took them; the look is applied where they are drawn and, from
+phase 2, baked into the print. Choose which filters to offer on
+`/admin`; with only one, nothing is asked.
 
 ## Using the iPad's own camera
 

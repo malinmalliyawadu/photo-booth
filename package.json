@@ -7,6 +7,7 @@
   "engines": { "node": ">=24" },
   "scripts": {
     "dev": "concurrently -n booth,worker -c blue,magenta \"pnpm --filter @booth/booth dev\" \"pnpm --filter @booth/worker dev\"",
+    "dev:http": "concurrently -n booth,worker -c blue,magenta \"pnpm --filter @booth/booth dev:http\" \"pnpm --filter @booth/worker dev\"",
     "build": "pnpm -r build",
     "test": "vitest run",
     "test:watch": "vitest",

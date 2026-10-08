@@ -3,9 +3,9 @@ import { isShortIdShape } from "@booth/core";
 import { sessionUrl } from "@/lib/api";
 
 /**
- * The QR for a session, made on the controller so it works with no
- * internet. It encodes the gallery link; the photos appear there once
- * the sync catches up.
+ * The QR for a session, made here rather than by a QR service so the
+ * screen never waits on one. It encodes the gallery link; the photos
+ * appear there once the sync catches up.
  */
 export async function GET(_request: Request, ctx: RouteContext<"/api/sessions/[id]/qr">) {
   const { id } = await ctx.params;

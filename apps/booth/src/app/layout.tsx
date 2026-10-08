@@ -3,9 +3,9 @@ import localFont from "next/font/local";
 import "./globals.css";
 
 /*
- * Fonts are files in the repo rather than next/font/google, because the
- * controller is built and run with no internet and a build that has to
- * fetch fonts would fail at the venue.
+ * Fonts are files in the repo rather than next/font/google: the build
+ * fetches nothing, and the kiosk draws the same glyphs on the night
+ * whatever the venue's connection is doing.
  */
 const fraunces = localFont({
   src: [

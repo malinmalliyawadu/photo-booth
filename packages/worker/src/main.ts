@@ -32,7 +32,10 @@ import { printerFor } from "./printer";
 const WORKER_ID = `${hostname()}:${process.pid}`;
 const POLL_MS = 250;
 const HEARTBEAT_MS = 5000;
-const HTTP_PORT = Number(process.env.WORKER_PORT ?? process.env.PORT ?? 3101);
+// Not PORT: that is the app's, and a launcher that sets it for the whole
+// `pnpm dev` tree (the desktop app's preview does) would put the worker
+// on the app's port.
+const HTTP_PORT = Number(process.env.WORKER_PORT ?? 3101);
 
 const log = (msg: string) => console.log(`[worker] ${new Date().toISOString()} ${msg}`);
 
