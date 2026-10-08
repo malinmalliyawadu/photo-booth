@@ -55,6 +55,8 @@ test.describe("with the camera allowed", () => {
     expect(reviewed.session?.shots).toHaveLength(4);
 
     // The shots are the camera's full frames, not the cropped preview.
+    // (A filter is CSS on the preview; the canvas reads the frame
+    // underneath it, so the originals keep the camera's colours.)
     for (const shot of reviewed.session!.shots) {
       const res = await request.get(shot.url);
       expect(res.headers()["content-type"]).toBe("image/jpeg");
@@ -71,7 +73,7 @@ test.describe("with the camera allowed", () => {
     await page.getByTestId(`layout-${layout.id}`).click();
     await expect(page.getByTestId("review")).toBeVisible({ timeout: 15_000 });
     const first = (await snapshot(request)).session!.shots[0]!.url;
-    await expect(page.getByTestId("review").locator(`img[src="${first}"]`)).toBeVisible();
+    await expect(page.getByTestId("review").locator(`img[src="${first}"]`).first()).toBeVisible();
 
     await page.getByRole("button", { name: "Retake" }).click();
     await expect(page.getByTestId("live")).toBeVisible();
@@ -85,7 +87,7 @@ test.describe("with the camera allowed", () => {
     const second = retaken.session!.shots[0]!.url;
     expect(second).not.toBe(first);
     // A new address, so Safari cannot answer it from its cache of the first.
-    const shown = page.getByTestId("review").locator(`img[src="${second}"]`);
+    const shown = page.getByTestId("review").locator(`img[src="${second}"]`).first();
     await expect(shown).toBeVisible();
     await expect.poll(() => shown.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
   });

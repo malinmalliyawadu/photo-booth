@@ -1,0 +1,2 @@
+ALTER TABLE "booth" ADD COLUMN "filters" jsonb DEFAULT '["colour","mono","vintage","faded","pop"]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "filter" text DEFAULT 'colour' NOT NULL;

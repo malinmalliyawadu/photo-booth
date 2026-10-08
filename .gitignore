@@ -22,3 +22,6 @@ next-env.d.ts
 # Playwright
 /e2e/test-results
 /e2e/playwright-report
+
+# The Claude desktop app's local preview config; per machine, not shared.
+/.claude/launch.json

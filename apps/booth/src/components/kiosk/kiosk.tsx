@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import type { FilterId } from "@booth/core";
 import type { Snapshot } from "@booth/db";
 import { post, useSnapshot } from "@/components/use-snapshot";
 import {
@@ -98,7 +99,9 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
           <ReviewScreen
             session={session}
             template={template}
+            filters={booth.filters}
             busy={busy}
+            onFilter={(filter: FilterId) => command(url("filter"), { filter })}
             onAccept={() => command(url("accept"))}
             onRetake={() => command(url("retake"))}
             onCancel={() => command(url("cancel"))}

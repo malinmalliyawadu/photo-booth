@@ -4,7 +4,7 @@
 #
 # `next start` cannot serve TLS, and Safari will not load an http
 # preview stream into an https page, so one proxy in front of both is
-# the simplest shape that works offline.
+# the simplest shape that works.
 #
 #   caddy run --config ops/Caddyfile
 #

@@ -12,13 +12,16 @@
  *   countdown ─(countdown_elapsed)─▶ capturing ─(shot_taken)─▶ countdown (next shot)
  *                                        │                 └─▶ composing (last shot)
  *                                        └─(shot_failed)─▶ countdown (retry) | failed
- *   composing ─(composed)─▶ review ─(accepted | timed_out)─▶ delivering ─(finished | timed_out)─▶ done
+ *   composing ─(composed)─▶ review ─(filter_chosen)─▶ review
+ *                                 └─(accepted | timed_out)─▶ delivering ─(finished | timed_out)─▶ done
  *
  * Timing events (`countdown_elapsed`, `timed_out`) carry the phase and
  * shot they were armed for and are ignored when the session has moved
  * on, so a stale job is harmless. Command events (`accepted`, `cancelled`
  * ...) in the wrong phase are refused, so a double tap cannot skip a step.
  */
+
+import { DEFAULT_FILTER, type FilterId } from "./filters";
 
 export type Phase =
   | "countdown"
@@ -50,6 +53,8 @@ export interface SessionState {
   print: PrintStatus | null;
   /** Why the session failed or was abandoned, for the admin page. */
   reason: string | null;
+  /** The look on the photos, chosen on the review screen; the camera's colours until then. */
+  filter: FilterId;
 }
 
 export type SessionEvent =
@@ -60,6 +65,7 @@ export type SessionEvent =
   | { type: "compose_failed"; reason: string }
   | { type: "accepted" }
   | { type: "retake" }
+  | { type: "filter_chosen"; filter: FilterId }
   | { type: "print_started" }
   | { type: "printed" }
   | { type: "print_failed"; reason: string }
@@ -115,7 +121,7 @@ export function isActivePhase(phase: Phase): boolean {
 }
 
 export function beginSession(
-  input: { shotCount: number; countdownSeconds: number },
+  input: { shotCount: number; countdownSeconds: number; filter?: FilterId },
   now: Date,
 ): { state: SessionState; effects: Effect[] } {
   if (!Number.isInteger(input.shotCount) || input.shotCount < 1) {
@@ -131,6 +137,7 @@ export function beginSession(
     countdownEndsAt: null,
     print: null,
     reason: null,
+    filter: input.filter ?? DEFAULT_FILTER,
   };
   return armCountdown(state, 1, now);
 }
@@ -182,6 +189,13 @@ export function transition(state: SessionState, event: SessionEvent, now: Date):
     case "retake": {
       if (state.phase !== "review") return refuse(`retake in ${describe(state)}`);
       return armCountdownTransition({ ...state, takenCount: 0, attempts: 0 }, 1, now);
+    }
+
+    // The guest compares the looks on the review screen. Once accepted
+    // the print is on its way with the one chosen, so no more changes.
+    case "filter_chosen": {
+      if (state.phase !== "review") return refuse(`filter chosen in ${describe(state)}`);
+      return ok({ ...state, filter: event.filter }, []);
     }
 
     case "print_started": {

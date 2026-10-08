@@ -2,8 +2,11 @@ import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import {
   ACTIVE_PHASES,
   beginSession,
+  defaultFilter,
   newShortId,
+  offeredFilters,
   transition,
+  type FilterId,
   type SessionEvent,
   type SessionState,
   type Transition,
@@ -35,6 +38,7 @@ export function rowToState(row: SessionRow): SessionState {
     countdownEndsAt: row.countdownEndsAt?.toISOString() ?? null,
     print: row.print,
     reason: row.reason,
+    filter: row.filter,
   };
 }
 
@@ -47,6 +51,7 @@ function stateToColumns(state: SessionState) {
     countdownEndsAt: state.countdownEndsAt ? new Date(state.countdownEndsAt) : null,
     print: state.print,
     reason: state.reason,
+    filter: state.filter,
     updatedAt: new Date(),
     ...(ACTIVE_PHASES.includes(state.phase) ? {} : { finishedAt: new Date() }),
   };
@@ -63,7 +68,8 @@ export async function findActiveSession(dbOrTx: Db | Tx): Promise<SessionRow | n
 /**
  * A guest tapped a layout. Refused while paused, while another session
  * is active, or for a layout that is not offered - all three are things
- * a second finger on the iPad can cause.
+ * a second finger on the iPad can cause. The photos start in the booth's
+ * default look; the guest picks another on the review screen.
  */
 export async function startSession(templateId: string, now = new Date()): Promise<SessionRow> {
   return db.transaction(async (tx) => {
@@ -80,7 +86,11 @@ export async function startSession(templateId: string, now = new Date()): Promis
     if (active) throw new SessionError("Another session is in progress");
 
     const { state, effects } = beginSession(
-      { shotCount: template.shotCount, countdownSeconds: settings.countdownSeconds },
+      {
+        shotCount: template.shotCount,
+        countdownSeconds: settings.countdownSeconds,
+        filter: defaultFilter(offeredFilters(settings.filters)),
+      },
       now,
     );
     const id = newShortId();
@@ -165,6 +175,15 @@ export async function commandSession(id: string, event: SessionEvent): Promise<S
   const result = await applySessionEvent(id, event);
   if (!result.ok) throw new SessionError(result.reason);
   return result.row;
+}
+
+/** The guest tapped a filter on the review screen; it must be one the booth offers. */
+export async function chooseFilter(id: string, filter: FilterId): Promise<SessionRow> {
+  const settings = await readBooth(db);
+  if (!offeredFilters(settings.filters).includes(filter)) {
+    throw new SessionError("That filter is not offered right now", 400);
+  }
+  return commandSession(id, { type: "filter_chosen", filter });
 }
 
 /**

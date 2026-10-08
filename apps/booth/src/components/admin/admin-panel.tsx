@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Camera, Lock, Minus, Pause, Play, Plus, Printer, RefreshCw, Trash2, Upload } from "lucide-react";
-import type { CameraMode } from "@booth/core";
+import { FILTERS, cssFilter, filterById, type CameraMode, type FilterId } from "@booth/core";
 import type { ComponentName, SessionView, Snapshot, TemplateRow, TemplateSummary } from "@booth/db";
 import { Composite, samplePhotos, sessionPhotos } from "@/components/composite";
 import { patch, post, useSnapshot } from "@/components/use-snapshot";
@@ -157,6 +157,11 @@ export function AdminPanel({ initial }: { initial: Snapshot }) {
           <EventName value={booth.eventName} onSave={(eventName) => setBooth({ eventName }, "Event name")} />
         </Section>
 
+        <Section title="Filters" eyebrow="Offered">
+          <p className="text-xs text-cream-soft">What a guest can pick on the review screen. Offer one and nothing is asked.</p>
+          <FilterToggles offered={booth.filters} onChange={(filters) => setBooth({ filters }, "Filters")} />
+        </Section>
+
         <Section title="Layouts" eyebrow="Templates">
           <ul className="space-y-3">
             {templates
@@ -269,6 +274,38 @@ function ComponentCard({
       <p className="mt-1 text-xs leading-snug text-cream-soft">{stale ? `Not heard from ${reporter}` : (value?.detail ?? "Not started")}</p>
       {value && <p className="mono mt-1 text-[11px] text-cream-faint">{timeAgo(value.seenAt, new Date(now).getTime())}</p>}
     </div>
+  );
+}
+
+/**
+ * One checkbox per filter in the catalogue, each with the same sample
+ * through its look. The last one on cannot be switched off: the kiosk
+ * always needs a filter to give a session.
+ */
+function FilterToggles({ offered, onChange }: { offered: FilterId[]; onChange: (filters: FilterId[]) => void }) {
+  return (
+    <ul className="mt-3 grid grid-cols-2 gap-2" data-testid="filters">
+      {FILTERS.map((f) => {
+        const on = offered.includes(f.id);
+        return (
+          <li key={f.id}>
+            <label className="flex items-center gap-3 rounded-xl bg-night p-2 ring-1 ring-night-edge">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/samples/sample-1.jpg" alt="" className="h-10 w-14 shrink-0 rounded-md object-cover" style={{ filter: cssFilter(f.id) }} />
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{f.name}</span>
+              <input
+                type="checkbox"
+                checked={on}
+                disabled={on && offered.length === 1}
+                onChange={(e) => onChange(e.target.checked ? [...offered, f.id] : offered.filter((id) => id !== f.id))}
+                className="h-5 w-5 accent-ember disabled:opacity-40"
+                data-testid={`filter-on-${f.id}`}
+              />
+            </label>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -418,7 +455,7 @@ function SessionRow({
   return (
     <div className={`flex items-center gap-3 border-t border-night-edge py-3 first:border-t-0 ${live ? "rounded-lg bg-ember-tint/40 px-2" : ""}`} data-testid={`session-${s.id}`}>
       {template && s.shots.length > 0 ? (
-        <Composite template={template} photos={sessionPhotos(s.shots)} className="w-20 shrink-0 rounded-md" />
+        <Composite template={template} photos={sessionPhotos(s.shots)} filter={s.filter} className="w-20 shrink-0 rounded-md" />
       ) : (
         <div className="flex h-14 w-20 shrink-0 items-center justify-center rounded-md bg-night text-cream-faint">
           <Camera className="h-5 w-5" />
@@ -432,6 +469,7 @@ function SessionRow({
         </p>
         <p className="text-cream-soft">
           {PHASE_LABEL[s.phase]}
+          {s.filter !== "colour" ? `, ${filterById(s.filter).name.toLowerCase()}` : ""}
           {s.print ? `, ${PRINT_LABEL[s.print].toLowerCase()}` : ""}
           {s.printCount > 1 ? ` (${s.printCount} prints)` : ""}
           {s.syncedAt ? ", synced" : ""}

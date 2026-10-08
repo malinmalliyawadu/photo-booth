@@ -12,7 +12,7 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
-import type { Phase, PrintStatus, Slot, TextField, CameraMode } from "@booth/core";
+import { FILTER_IDS, type CameraMode, type FilterId, type Phase, type PrintStatus, type Slot, type TextField } from "@booth/core";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
@@ -32,6 +32,8 @@ export const booth = pgTable(
     paperPackSize: integer("paper_pack_size").notNull().default(36),
     /** When set, the picker is skipped and every session uses this layout. */
     lockedTemplateId: text("locked_template_id"),
+    /** Which filters the kiosk offers; one means the step is skipped. */
+    filters: jsonb("filters").$type<FilterId[]>().notNull().default([...FILTER_IDS]),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (t) => [check("booth_singleton", sql`${t.id} = 1`)],
@@ -87,6 +89,8 @@ export const sessions = pgTable(
     templateId: text("template_id")
       .notNull()
       .references(() => templates.id),
+    /** The look the guest picked, applied wherever the photos are drawn. */
+    filter: text("filter").$type<FilterId>().notNull().default("colour"),
     phase: text("phase").$type<Phase>().notNull(),
     shot: integer("shot").notNull(),
     shotCount: integer("shot_count").notNull(),

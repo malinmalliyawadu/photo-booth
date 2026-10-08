@@ -1,10 +1,9 @@
 # Photo booth
 
-A guest taps the iPad, picks a layout, poses through a countdown with
-one shot per photo slot, and gets a QR code to their photos. One
-postcard print comes out for the guestbook. Everything runs on a
-private network with no internet; the online gallery catches up when
-there is a connection.
+A guest taps the iPad, picks a layout and a filter, poses through a
+countdown with one shot per photo slot, and gets a QR code to their
+photos. One postcard print comes out for the guestbook. The booth has
+internet at the venue: the online gallery fills as sessions finish.
 
 Built for a wedding, named without it on purpose: the booth will be
 lent to friends' parties, and nothing in the code is specific to one
@@ -21,7 +20,7 @@ Vitest for pure modules, Playwright for the kiosk's happy path.
 | `apps/booth` | Next.js: kiosk (`/`), admin (`/admin`), slideshow (`/slideshow`), the session API, the SSE stream, `/media` | The controller, or Coolify |
 | `apps/gallery` | Next.js: one page per session, the all-photos page, the sync endpoint (phase 5; a stub today); `Dockerfile` builds it from the repo root | Coolify |
 | `packages/worker` | Node process: camera, compositor, print queue, cloud sync, the jobs loop | The controller, or Coolify |
-| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants, the `Camera` interface, the iPad capture plan and viewfinder crop | Both apps and the worker |
+| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants, the filter catalogue, the `Camera` interface, the iPad capture plan and viewfinder crop | Both apps and the worker |
 | `packages/db` | Drizzle schema + migrations, the repositories, the data directory, the snapshot | Both apps and the worker |
 | `templates/` | Layout PNGs and optional JSON sidecars; the seed loads them | Uploaded through admin on the night |
 | `ops/` | `ca.sh` (local certificate authority), `Caddyfile`; systemd units and the soak test arrive in phase 6 | The controller |
@@ -50,7 +49,7 @@ between a change in `core` and the app seeing it.
 - **Pure modules get unit tests, UI does not.** `packages/core` is pure: no database, no clock, no filesystem. Anything that decides what happens next belongs there.
 - **The state machine is the only way a session changes.** `applySessionEvent` in `packages/db/src/sessions.ts` loads the row under a lock, runs `transition`, persists, enqueues effects and NOTIFYs, in one transaction. Route handlers and worker handlers call it; nobody writes `sessions.phase` by hand.
 - **Every state change ends with NOTIFY inside the transaction**, so the worker and the SSE stream learn about it on commit and never see a half-written row.
-- **Nothing in the kiosk needs the internet.** Fonts are files in the repo; the QR is made on the controller; the gallery link works once the sync catches up.
+- **The booth has internet, but a session never waits on it.** Uploads and the gallery sync run as jobs with retries; the QR is made on the controller; fonts are files in the repo. A slow or dropped connection delays the gallery, never the countdown, the review or the print.
 - **`/admin` and `/api/admin` stay behind the password.** Anybody on the booth Wi-Fi can reach the controller, and admin can delete sessions and see every photo. `src/proxy.ts` is the gate; `ADMIN_PASSWORD` unset means nobody signs in.
 - **Stored paths are relative to the data directory** (`BOOTH_DATA_DIR`), so the directory can move or be restored without touching a row. `resolveData` refuses anything that escapes it.
 - **A stored file is never overwritten.** `/media` serves everything as immutable, so `sessionPaths` names a new file on every call (a retake, a recompose) and the row is how it is found again. Reusing a name shows the guest the old photo from Safari's cache.
@@ -61,7 +60,8 @@ between a change in `core` and the app seeing it.
 countdown ─(countdown_elapsed)─▶ capturing ─(shot_taken)─▶ countdown (next shot)
                                      │                 └─▶ composing (last shot)
                                      └─(shot_failed)─▶ countdown (retry, 3 attempts) | failed
-composing ─(composed)─▶ review ─(accepted | timed_out)─▶ delivering ─(finished | timed_out)─▶ done
+composing ─(composed)─▶ review ─(filter_chosen)─▶ review
+                              └─(accepted | timed_out)─▶ delivering ─(finished | timed_out)─▶ done
 any active phase ─(cancelled)─▶ abandoned
 ```
 
@@ -215,6 +215,21 @@ compositor produces the print and web JPEGs from the same geometry and
   a deleted or renamed seed layout does not come back on the next start.
 - **Reprint** is a plain `print` job with `reprint: true`; it does not
   touch the session's phase.
+- **Filters are a look on the session, not on the files.** The guest
+  picks one on the review screen, comparing the looks on their own
+  photos; the chips are the first shot through each. The tap is a
+  `filter_chosen` event, accepted only in `review`, so `sessions.filter`
+  changes like everything else does and is fixed once the print is on
+  its way. A retake keeps it and poses through it. The shots on disk are
+  the camera's own frames. `packages/core/src/filters.ts` is the one
+  catalogue: each filter is a `Look` (grayscale, sepia, saturate,
+  contrast, brightness) that `cssFilter` turns into CSS for `Composite`
+  and the viewfinder today, and that phase 2's compositor applies
+  through sharp's equivalents, so the print matches the screen. Because
+  the choice comes after `composing`, phase 2 composes the print and web
+  JPEGs on `accepted` (or recomposes then), not before the review.
+  `booth.filters` is which ones the attendant offers; with one on offer
+  the review shows no chips and every session gets that one.
 
 ## Phases
 
@@ -222,7 +237,7 @@ compositor produces the print and web JPEGs from the same geometry and
 2. **Compositor** - sharp behind the template loader; print and web JPEGs for any slot count.
 3. **Real camera** - `GPhoto2Camera`, MJPEG liveview, the stop-shoot-restart cycle, USB reconnect.
 4. **Printing** - CUPS (driverless IPP first, Gutenprint second), the queue, the paper counter.
-5. **Uploads, gallery, QR** - R2 with an offline queue, `apps/gallery` on Coolify, the all-photos page.
+5. **Uploads, gallery, QR** - R2 through the jobs queue with retries, `apps/gallery` on Coolify, the all-photos page.
 6. **Hardening** - systemd, a watchdog, recovery after a power cut, the 4-hour soak test.
 7. **Polish** - sounds, retake (modelled already, not on the review screen yet), final artwork, whatever the hallway tests turn up.
 
