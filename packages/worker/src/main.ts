@@ -21,6 +21,7 @@ import {
   readBooth,
   reportComponent,
   requeueStaleJobs,
+  runMigrations,
   seed,
 } from "@booth/db";
 import { cameraFor } from "./camera";
@@ -76,6 +77,9 @@ class CameraManager {
 
 async function main() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set (see .env.example)");
+  // Migrations then the seed, both idempotent, so a fresh database (a
+  // new controller, a container on Coolify) comes up with no manual step.
+  await runMigrations();
   await seed();
 
   const cameras = new CameraManager();

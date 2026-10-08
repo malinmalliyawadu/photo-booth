@@ -19,7 +19,8 @@ export async function readJson<T>(request: Request): Promise<T> {
 
 /** Where the QR code points. Phase 5 makes it the gallery on Coolify. */
 export function galleryOrigin(): string {
-  return (process.env.GALLERY_ORIGIN ?? "https://localhost:3100").replace(/\/+$/, "");
+  // `||`, not `??`: a compose file passes an unset variable as "".
+  return (process.env.GALLERY_ORIGIN || "https://localhost:3100").replace(/\/+$/, "");
 }
 
 export function sessionUrl(id: string): string {
