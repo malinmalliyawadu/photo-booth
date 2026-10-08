@@ -10,7 +10,7 @@
  */
 import { hostname } from "node:os";
 import { Client } from "pg";
-import type { Camera, CameraMode } from "@booth/core";
+import { gallerySetting, type Camera, type CameraMode } from "@booth/core";
 import {
   CHANNEL,
   claimJob,
@@ -25,6 +25,7 @@ import {
   seed,
 } from "@booth/db";
 import { cameraFor } from "./camera";
+import { galleryFor } from "./gallery";
 import { startHttp } from "./http";
 import { handlers, type Services } from "./handlers";
 import { printerFor } from "./printer";
@@ -89,7 +90,15 @@ async function main() {
 
   const cameras = new CameraManager();
   const printer = printerFor(process.env.BOOTH_PRINTER);
-  const services: Services = { camera: (mode) => cameras.for(mode), printer, log };
+  const gallery = galleryFor(gallerySetting(process.env));
+  log(
+    gallery.setting.kind === "on"
+      ? `gallery: ${gallery.setting.host}`
+      : gallery.setting.kind === "off"
+        ? "gallery: none configured, sessions stay on the booth"
+        : `gallery: ${gallery.setting.detail}`,
+  );
+  const services: Services = { camera: (mode) => cameras.for(mode), printer, gallery, log };
 
   const startedAt = new Date();
   const http = startHttp(HTTP_PORT, () => ({ worker: WORKER_ID, since: startedAt.toISOString(), camera: cameras.status() ?? { status: "kiosk", detail: "The iPad reports its own camera" } }));
@@ -127,12 +136,12 @@ async function main() {
       const settings = await readBooth(db);
       await cameras.for(settings.cameraMode);
       const cam = cameras.status();
-      const prn = await printer.status();
+      const [prn, gal] = await Promise.all([printer.status(), gallery.status()]);
       await Promise.all([
         reportComponent(db, "worker", "ok", `Running on ${hostname()}`),
         cam && reportComponent(db, "camera", cam.status, cam.detail),
         reportComponent(db, "printer", prn.ok ? "ok" : "error", prn.detail),
-        reportComponent(db, "sync", "warn", "Fake sync: nothing is uploaded until phase 5"),
+        reportComponent(db, "sync", gal.status, gal.detail),
       ]);
     } catch (err) {
       log(`heartbeat failed: ${err instanceof Error ? err.message : err}`);

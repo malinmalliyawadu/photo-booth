@@ -1,11 +1,11 @@
 /**
  * Session IDs: the entire access control for a guest's photos.
  *
- * The QR on the kiosk links to /s/{id} on the gallery and there is no
- * login behind it, so the whole burden is on the ID being unguessable:
- * 100 bits from `crypto.getRandomValues`. The alphabet is 32 characters
- * with every confusable pair removed (no i/l/1, no o/0), because when the
- * QR will not scan the attendant reads the ID aloud.
+ * The QR on the kiosk links to the gallery's page for the session and
+ * there is no login behind it, so the whole burden is on the ID being
+ * unguessable: 100 bits from `crypto.getRandomValues`. The alphabet is
+ * 32 characters with every confusable pair removed (no i/l/1, no o/0),
+ * because when the QR will not scan the attendant reads the ID aloud.
  *
  * Carried over from the wedding ledger's invite tokens unchanged, so a
  * session ID and an invite token are the same shape.

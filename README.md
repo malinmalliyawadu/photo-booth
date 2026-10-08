@@ -1,7 +1,8 @@
 # Photo booth
 
 Tap the iPad, pick a layout and a filter, pose, print, scan. Runs on a
-mini PC at the venue or on Coolify; the gallery is online.
+mini PC at the venue or on Coolify; the photos go to the event's own
+site, where guests' phone photos land too.
 
 See `CLAUDE.md` for the architecture, the state machine and the decisions.
 
@@ -41,6 +42,19 @@ black & white, vintage, faded or pop. The photos on disk stay as the
 camera took them; the look is applied where they are drawn and, from
 phase 2, baked into the print. Choose which filters to offer on
 `/admin`; with only one, nothing is asked.
+
+## The gallery
+
+The booth has no gallery of its own. Each finished session is sent to
+the event's site, so the booth's prints sit in the same album as the
+photos guests upload from their phones, and the QR code on the kiosk
+links to that site's page for the session. Three variables in `.env`
+say where (`GALLERY_SYNC_URL`, `GALLERY_SYNC_TOKEN`,
+`GALLERY_SESSION_URL`; see `.env.example`). For the wedding they point
+at the wedding-planner app's `/api/booth/photos` and `/i/booth/{id}`.
+Leave them unset and the print is the copy. The "Sync" card on `/admin`
+says whether the site is reachable, and every finished session has a
+"send again" button there.
 
 ## Using the iPad's own camera
 

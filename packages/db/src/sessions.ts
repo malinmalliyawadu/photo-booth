@@ -13,7 +13,7 @@ import {
 } from "@booth/core";
 import { db, type Db, type Tx } from "./client";
 import { readBooth } from "./booth";
-import { enqueueEffects, enqueueJob } from "./jobs";
+import { SYNC_ATTEMPTS, enqueueEffects, enqueueJob } from "./jobs";
 import { notify } from "./notify";
 import { jobs, sessions, shots, templates, type SessionRow } from "./schema";
 import { removeData, sessionPaths } from "./storage";
@@ -259,6 +259,22 @@ export async function reprintSession(id: string): Promise<void> {
     if (!row || row.deletedAt) throw new SessionError("No such session", 404);
     if (row.takenCount < row.shotCount) throw new SessionError("That session has no photos to print", 400);
     await enqueueJob(tx, { kind: "print", sessionId: id, payload: { reprint: true }, maxAttempts: 1 });
+    await notify(tx);
+  });
+}
+
+/**
+ * Sends a finished session to the gallery again, from the admin page:
+ * after the retries ran out, or after the gallery was configured late.
+ * The gallery keys on the session ID, so a second send replaces the
+ * first rather than duplicating it.
+ */
+export async function resyncSession(id: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const row = await tx.query.sessions.findFirst({ where: eq(sessions.id, id) });
+    if (!row || row.deletedAt) throw new SessionError("No such session", 404);
+    if (row.takenCount < row.shotCount) throw new SessionError("That session has no photos to send", 400);
+    await enqueueJob(tx, { kind: "sync", sessionId: id, maxAttempts: SYNC_ATTEMPTS });
     await notify(tx);
   });
 }

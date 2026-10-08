@@ -41,6 +41,10 @@ services:
     environment:
       DATABASE_URL: postgres://booth:${SERVICE_PASSWORD_POSTGRES}@db:5432/booth
       BOOTH_PRINTER: fake
+      # Where finished sessions are sent (.env.example explains all three
+      # GALLERY_* variables). Unset, sessions stay on the booth.
+      GALLERY_SYNC_URL: ${GALLERY_SYNC_URL:-}
+      GALLERY_SYNC_TOKEN: ${GALLERY_SYNC_TOKEN:-}
     volumes:
       - booth-data:/data
     depends_on:
@@ -55,9 +59,9 @@ services:
     environment:
       DATABASE_URL: postgres://booth:${SERVICE_PASSWORD_POSTGRES}@db:5432/booth
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?}
-      # Where the QR code points. The gallery's domain once it serves
-      # /s/{id} (phase 5); until then any URL you like.
-      GALLERY_ORIGIN: ${GALLERY_ORIGIN:-}
+      # Where the QR code points: the gallery's page for a session, with
+      # {id} where the session ID goes.
+      GALLERY_SESSION_URL: ${GALLERY_SESSION_URL:-}
     volumes:
       - booth-data:/data
     # The worker applies the migrations and the seed before it reports

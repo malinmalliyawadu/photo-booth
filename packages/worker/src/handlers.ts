@@ -1,4 +1,4 @@
-import type { Camera, CameraMode, Phase } from "@booth/core";
+import { planSync, type Camera, type CameraMode, type Phase } from "@booth/core";
 import {
   applySessionEvent,
   consumePaper,
@@ -14,11 +14,13 @@ import {
   shotPath,
   type JobRow,
 } from "@booth/db";
+import type { Gallery } from "./gallery";
 import type { Printer } from "./printer";
 
 export interface Services {
   camera: (mode: CameraMode) => Promise<Camera | null>;
   printer: Printer;
+  gallery: Gallery;
   log: (msg: string) => void;
 }
 
@@ -107,9 +109,36 @@ const print: Handler = async (job, services) => {
   }
 };
 
-/** Phase 5 uploads to R2 and posts to the gallery. The fake just marks the session synced. */
-const sync: Handler = async (job) => {
-  await markSynced(sessionOf(job));
+/**
+ * Sends the composed photo to the gallery (`gallery.ts`). A session is
+ * `synced` only once the gallery has said yes; with no gallery
+ * configured it never is, and the admin page says so rather than
+ * pretending. Failures are the queue's to retry: the guest already has
+ * their print and their QR, and the page behind the QR fills in when
+ * this catches up.
+ */
+const sync: Handler = async (job, services) => {
+  const id = sessionOf(job);
+  const session = await getSession(id);
+  if (!session) return;
+  const plan = planSync(services.gallery.setting, session);
+  switch (plan.kind) {
+    case "skip":
+      services.log(`session ${id}: not sent to the gallery: ${plan.reason}`);
+      return;
+    case "fail":
+      throw new Error(plan.reason);
+    case "upload": {
+      const { url } = await services.gallery.upload({
+        id,
+        takenAt: session.createdAt,
+        photo: resolveData(plan.photo),
+        thumb: resolveData(plan.thumb),
+      });
+      await markSynced(id);
+      services.log(`session ${id}: in the gallery at ${url}`);
+    }
+  }
 };
 
 export const handlers: Record<JobRow["kind"], Handler> = {

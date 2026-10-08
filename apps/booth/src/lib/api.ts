@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sessionLink } from "@booth/core";
 import { SessionError, TemplateError } from "@booth/db";
 
 /** Maps the persistence layer's refusals to responses; anything else is a 500 with its message logged. */
@@ -17,12 +18,13 @@ export async function readJson<T>(request: Request): Promise<T> {
   }
 }
 
-/** Where the QR code points. Phase 5 makes it the gallery on Coolify. */
-export function galleryOrigin(): string {
-  // `||`, not `??`: a compose file passes an unset variable as "".
-  return (process.env.GALLERY_ORIGIN || "https://localhost:3100").replace(/\/+$/, "");
-}
-
+/**
+ * Where the QR code points: the gallery's page for the session, from
+ * `GALLERY_SESSION_URL` (see `sessionLink`). Unset, it points at the
+ * booth itself, which has no such page: a QR has to encode something,
+ * and a booth with no gallery is a booth whose prints are the copy.
+ */
 export function sessionUrl(id: string): string {
-  return `${galleryOrigin()}/s/${id}`;
+  // `||`, not `??`: a compose file passes an unset variable as "".
+  return sessionLink(process.env.GALLERY_SESSION_URL || "https://localhost:3100/s/{id}", id);
 }
