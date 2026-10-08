@@ -159,38 +159,40 @@ export function AdminPanel({ initial }: { initial: Snapshot }) {
 
         <Section title="Layouts" eyebrow="Templates">
           <ul className="space-y-3">
-            {templates.map((t) => (
-              <li key={t.id} className="flex items-center gap-3" data-testid={`template-${t.id}`}>
-                <Composite template={t} photos={samplePhotos(t.shotCount)} className="w-24 shrink-0 rounded-md" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold">{t.name}</p>
-                  <p className="mono text-xs text-cream-faint">
-                    {t.slots.length} {t.slots.length === 1 ? "slot" : "slots"}, {t.shotCount} {t.shotCount === 1 ? "shot" : "shots"}, {t.orientation}
-                  </p>
-                  {t.warnings.length > 0 && <p className="mt-1 text-xs text-gold">{t.warnings.join(" ")}</p>}
-                </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={t.active}
-                    onChange={(e) => run("Layout", () => patch(`/api/admin/templates/${t.id}`, { active: e.target.checked }))}
-                    className="h-5 w-5 accent-ember"
-                    data-testid={`template-active-${t.id}`}
-                  />
-                  On
-                </label>
-                <button
-                  type="button"
-                  className="btn btn-danger min-h-9 px-2"
-                  aria-label={`Delete ${t.name}`}
-                  onClick={() => {
-                    if (confirm(`Delete the layout "${t.name}"?`)) void run("Delete", () => fetch(`/api/admin/templates/${t.id}`, { method: "DELETE" }));
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </li>
-            ))}
+            {templates
+              .filter((t) => !t.deleted)
+              .map((t) => (
+                <li key={t.id} className="flex items-center gap-3" data-testid={`template-${t.id}`}>
+                  <Composite template={t} photos={samplePhotos(t.shotCount)} className="w-24 shrink-0 rounded-md" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold">{t.name}</p>
+                    <p className="mono text-xs text-cream-faint">
+                      {t.slots.length} {t.slots.length === 1 ? "slot" : "slots"}, {t.shotCount} {t.shotCount === 1 ? "shot" : "shots"}, {t.orientation}
+                    </p>
+                    {t.warnings.length > 0 && <p className="mt-1 text-xs text-gold">{t.warnings.join(" ")}</p>}
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={t.active}
+                      onChange={(e) => run("Layout", () => patch(`/api/admin/templates/${t.id}`, { active: e.target.checked }))}
+                      className="h-5 w-5 accent-ember"
+                      data-testid={`template-active-${t.id}`}
+                    />
+                    On
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-danger min-h-9 px-2"
+                    aria-label={`Delete ${t.name}`}
+                    onClick={() => {
+                      if (confirm(`Delete the layout "${t.name}"?`)) void run("Delete", () => fetch(`/api/admin/templates/${t.id}`, { method: "DELETE" }));
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
           </ul>
           <UploadForm onDone={(msg) => setToast(msg)} />
         </Section>

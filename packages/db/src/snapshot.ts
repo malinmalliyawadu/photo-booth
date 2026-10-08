@@ -42,6 +42,8 @@ export interface TemplateSummary {
   active: boolean;
   sortOrder: number;
   warnings: string[];
+  /** Retired: past sessions still draw it, nothing offers it. Never active. */
+  deleted: boolean;
   /** The knocked-out overlay at print size and at screen size. */
   overlayUrl: string;
   screenUrl: string;
@@ -145,6 +147,7 @@ export async function readSnapshot(): Promise<Snapshot> {
       active: t.active,
       sortOrder: t.sortOrder,
       warnings: t.warnings,
+      deleted: t.deletedAt !== null,
       overlayUrl: `/media/templates/${t.id}.overlay.png`,
       screenUrl: `/media/templates/${t.id}.thumb.png`,
     })),
