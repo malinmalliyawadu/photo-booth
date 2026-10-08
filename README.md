@@ -50,8 +50,8 @@ sessions still show the artwork they were taken with.
 
 On the review screen a guest picks a filter for their photos: colour,
 black & white, vintage, faded or pop. The photos on disk stay as the
-camera took them; the look is applied where they are drawn and, from
-phase 2, baked into the print. Choose which filters to offer on
+camera took them; the look is applied where they are drawn and baked
+into the print and the gallery photo. Choose which filters to offer on
 `/admin`; with only one, nothing is asked.
 
 ## The gallery

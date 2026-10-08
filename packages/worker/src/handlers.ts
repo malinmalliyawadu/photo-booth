@@ -11,9 +11,10 @@ import {
   recordShot,
   resolveData,
   sessionPaths,
-  shotPath,
   type JobRow,
+  type SessionRow,
 } from "@booth/db";
+import { composeSession } from "./compositor";
 import type { Gallery } from "./gallery";
 import type { Printer } from "./printer";
 
@@ -72,12 +73,42 @@ const timeout: Handler = async (job) => {
 };
 
 /**
- * Phase 2 puts sharp behind this. Until then the kiosk lays the shots
- * under the template overlay itself, so there is nothing to produce.
+ * The guest accepted (or walked away from) the review: the look and the
+ * mirror are settled, so the print, web and thumbnail JPEGs are made
+ * now, and the print and the gallery upload follow from `composed`. A
+ * failure is retried by the queue; the last one fails the session, so
+ * the kiosk says so instead of waiting out the timeout.
  */
-const compose: Handler = async (job) => {
-  await applySessionEvent(sessionOf(job), { type: "composed" });
+const compose: Handler = async (job, services) => {
+  const id = sessionOf(job);
+  const session = await getSession(id);
+  if (!session || session.deletedAt || session.phase !== "composing") return;
+  const started = Date.now();
+  try {
+    await composeSession(id);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    if (job.attempts < job.maxAttempts) throw err;
+    services.log(`session ${id}: compose failed: ${reason}`);
+    await applySessionEvent(id, { type: "compose_failed", reason: `The photos could not be put together: ${reason}` });
+    return;
+  }
+  services.log(`session ${id}: composed in ${Date.now() - started} ms`);
+  await applySessionEvent(id, { type: "composed" });
 };
+
+/**
+ * The session's files, composing them first if it has none: a session
+ * from before the compositor, or one it failed on, reprinted or sent
+ * again from the admin page.
+ */
+async function composed(session: SessionRow, services: Services): Promise<SessionRow> {
+  if (session.compositePath && session.webPath && session.thumbPath) return session;
+  if (session.takenCount < session.shotCount) throw new Error("the session has no photos to put together");
+  services.log(`session ${session.id}: composing on demand`);
+  const paths = await composeSession(session.id);
+  return { ...session, ...paths };
+}
 
 const print: Handler = async (job, services) => {
   const id = sessionOf(job);
@@ -93,11 +124,8 @@ const print: Handler = async (job, services) => {
     return;
   }
   try {
-    // Until the compositor lands there is no print file; the fake
-    // printer does not mind being handed the first shot.
-    const file = session.compositePath ?? (await shotPath(id, 1));
-    if (!file) throw new Error("the session has no photo to print");
-    await services.printer.print(resolveData(file));
+    const { compositePath } = await composed(session, services);
+    await services.printer.print(resolveData(compositePath!));
     await consumePaper(db);
     await countPrint(id);
     if (!reprint) await applySessionEvent(id, { type: "printed" });
@@ -119,15 +147,21 @@ const print: Handler = async (job, services) => {
  */
 const sync: Handler = async (job, services) => {
   const id = sessionOf(job);
-  const session = await getSession(id);
+  let session = await getSession(id);
   if (!session) return;
-  const plan = planSync(services.gallery.setting, session);
+  let plan = planSync(services.gallery.setting, session);
+  if (plan.kind === "compose") {
+    session = await composed(session, services);
+    plan = planSync(services.gallery.setting, session);
+  }
   switch (plan.kind) {
     case "skip":
       services.log(`session ${id}: not sent to the gallery: ${plan.reason}`);
       return;
     case "fail":
       throw new Error(plan.reason);
+    case "compose":
+      throw new Error("the session's photos were put together but not recorded");
     case "upload": {
       const { url } = await services.gallery.upload({
         id,

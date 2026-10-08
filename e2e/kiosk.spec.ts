@@ -68,9 +68,23 @@ test("a guest walks the booth from tap to QR", async ({ page, request }) => {
   await page.getByTestId("accept").click();
   await expect(page.getByTestId("deliver")).toBeVisible();
   await expect(page.getByTestId("qr")).toBeVisible();
-  const delivered1 = page.getByTestId("deliver").locator(`img[src="${reviewed.session!.shots[0]!.url}"]`).first();
-  await expect(delivered1).toHaveCSS("filter", MONO_CSS);
-  await expect(delivered1).toHaveCSS("transform", MIRROR_CSS);
+
+  // The QR screen shows the compositor's JPEG, the one that was printed
+  // and goes to the gallery: the look and the mirror are in its pixels,
+  // not drawn over it.
+  const composedSession = (await snapshot(request)).session!;
+  expect(composedSession.webUrl).toMatch(/\/web-[0-9a-f]+\.jpg$/);
+  const composed = page.getByTestId("deliver").getByTestId("composed");
+  await expect(composed).toHaveAttribute("src", composedSession.webUrl!);
+  await expect(composed).toHaveCSS("filter", "none");
+  await expect(composed).toHaveCSS("transform", "none");
+  await expect.poll(() => composed.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  await expect(page.getByTestId("deliver").locator(`img[src="${reviewed.session!.shots[0]!.url}"]`)).toHaveCount(0);
+  for (const url of [composedSession.compositeUrl, composedSession.webUrl, composedSession.thumbUrl]) {
+    const res = await request.get(url!);
+    expect(res.status(), url!).toBe(200);
+    expect(res.headers()["content-type"]).toBe("image/jpeg");
+  }
   await expect(page.getByTestId("print-status")).toHaveText(/in the tray/);
 
   const delivered = await snapshot(request);

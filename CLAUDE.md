@@ -20,7 +20,7 @@ Vitest for pure modules, Playwright for the kiosk's happy path.
 | --- | --- | --- |
 | `apps/booth` | Next.js: kiosk (`/`), admin (`/admin`), slideshow (`/slideshow`), the session API, the SSE stream, `/media` | The controller, or Coolify |
 | `packages/worker` | Node process: camera, compositor, print queue, the gallery sync, the jobs loop | The controller, or Coolify |
-| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants, the filter catalogue, the `Camera` interface, the iPad capture plan and viewfinder crop, the gallery setting and sync plan | The app and the worker |
+| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants, the filter catalogue and its pixel arithmetic, the compositor's geometry, the `Camera` interface, the iPad capture plan and viewfinder crop, the gallery setting and sync plan | The app and the worker |
 | `packages/db` | Drizzle schema + migrations, the repositories, the data directory, the snapshot | The app and the worker |
 | `templates/` | Layout PNGs and optional JSON sidecars; the seed loads them | Uploaded through admin on the night |
 | `ops/` | `ca.sh` (local certificate authority), `Caddyfile`; systemd units and the soak test arrive in phase 6 | The controller |
@@ -63,12 +63,18 @@ finished session there and the QR links there; see **The gallery**.
 
 ```
 countdown ─(countdown_elapsed)─▶ capturing ─(shot_taken)─▶ countdown (next shot)
-                                     │                 └─▶ composing (last shot)
+                                     │                 └─▶ review (last shot)
                                      └─(shot_failed)─▶ countdown (retry, 3 attempts) | failed
-composing ─(composed)─▶ review ─(filter_chosen | mirror_chosen)─▶ review
-                              └─(accepted | timed_out)─▶ delivering ─(finished | timed_out)─▶ done
+review ─(filter_chosen | mirror_chosen)─▶ review
+       ├─(retake)─▶ countdown (shot 1)
+       └─(accepted | timed_out)─▶ composing ─(composed)─▶ delivering ─(finished | timed_out)─▶ done
+                                            └─(compose_failed | timed_out)─▶ failed
 any active phase ─(cancelled)─▶ abandoned
 ```
+
+The review comes before the compositor because the review is where the
+guest picks the look and the mirror; the JPEGs are made once, from what
+was accepted, and the print and the sync follow from `composed`.
 
 `transition(state, event, now)` returns the next state plus **effects**,
 which become rows in the `jobs` table: `countdown` (due at the deadline),
@@ -126,7 +132,7 @@ camera and the worker's capture job only logs that it is waiting.
 **What guests see is what the layout keeps.** `viewfinderCrop`
 (`packages/core/src/viewfinder.ts`) crops the live preview, in every
 camera mode, to the centred cover crop of the slot(s) the shot fills,
-which is how `Composite` (and phase 2's compositor) crops the photo.
+which is how `Composite` and the compositor (`placePhotos`) crop the photo.
 
 ## How a screen works
 
@@ -166,13 +172,12 @@ link to put in the QR. Three variables, all optional:
 
 `gallerySetting(env)` reads them and reports half a configuration
 instead of guessing; `planSync` decides whether a session is uploaded,
-skipped (no gallery, or deleted) or failed for the queue to retry (no
-web JPEG yet, misconfigured). **The sync sends the compositor's web
-JPEG and thumbnail, never the raw shots**: the look and the mirror are
-baked in, and the shots are the camera's own frames. Until phase 2's
-compositor fills `webPath`, a configured gallery fails every sync with
-"the compositor has not produced one", which is the honest state;
-with no gallery configured a session is simply never `synced`, and the
+skipped (no gallery, or deleted), composed first (all its photos but
+no web JPEG: a session from before the compositor, or one it failed on)
+or failed for the queue to retry (misconfigured). **The sync sends the
+compositor's web JPEG and thumbnail, never the raw shots**: the look and
+the mirror are baked in, and the shots are the camera's own frames.
+With no gallery configured a session is simply never `synced`, and the
 admin row says so.
 
 The wedding-planner's end is `POST /api/booth/photos` (the token is its
@@ -191,7 +196,8 @@ order, and `knockOutMarkers` makes them transparent with a one-pixel
 halo. Three files are written: the original, the knocked-out overlay at
 print size, and the same overlay at screen size. The optional sidecar
 maps slots to shots (`{"shots":[1,1,2,2,3,3]}` is the double strip) and
-lists text fields for the compositor.
+may list text fields, which nothing draws yet: ingesting one adds a
+warning, so the words belong in the design.
 
 The PNGs in `templates/` are placeholders from `scripts/make-sample-assets.ts`,
 which centres each caption in the band under the photos by measuring the
@@ -203,12 +209,35 @@ existing database takes the new artwork as an admin upload after deleting
 the old layout, which retires it if sessions used it (the README has the
 steps).
 
-**Until phase 2 there is no compositor.** The browser lays the shots
-under the overlay itself (`Composite` in `apps/booth/src/components`)
-using the slot rectangles as percentages, which is what the picker, the
-review, the QR screen, the slideshow and admin all show. Phase 2's sharp
-compositor produces the print and web JPEGs from the same geometry and
-`compositePath` on the session stops being null.
+## The compositor (`packages/core/src/compositor.ts`, `packages/worker/src/compositor.ts`)
+
+Two renderers draw a session, and they must agree. Until it is
+composed, the browser lays the shots under the overlay itself
+(`Composite` in `apps/booth/src/components`) using the slot rectangles
+as percentages, with the look as CSS: that is the picker and the
+review. On `accepted` the worker's `composeSession` makes three JPEGs
+with sharp: the postcard (`compositePath`, always landscape at
+`PRINT_PX` and 300 dpi, a portrait layout turned a quarter clockwise),
+the web photo (`webPath`, 1600 px long edge, the layout's way up) and a
+thumbnail (`thumbPath`). From then on `Composite` is given the JPEG
+(`composed`) and shows it in the same box: the QR screen, the attract
+loop, the slideshow and admin show exactly what was printed and sent.
+
+Core holds every number. `placePhotos` gives each slot a centred cover
+crop of its shot (the viewfinder's `coverCrop`) drawn one pixel past
+the slot, over the halo `knockOutMarkers` cleared. `applyLook` is the
+CSS filter functions as the Filter Effects spec defines them, in sRGB,
+clamped after every step and truncated to 8 bits, which is what
+Chromium does: the tests hold Chromium's own output for every look and
+the compositor lands within one level of it. The worker decodes each
+shot once (EXIF-rotated, sRGB), cuts each slot from it, flops it if
+mirrored, runs the look, lays the photos on white with the print-size
+overlay on top, and writes the three files under fresh names.
+
+The compose job runs only in `composing`; the queue retries a failure
+and the last attempt sends `compose_failed`, so the kiosk says so
+rather than waiting out the 60 s timeout. A reprint or a "send again"
+of a session with photos but no JPEGs composes it on demand.
 
 ## Decisions made
 
@@ -221,9 +250,7 @@ compositor produces the print and web JPEGs from the same geometry and
   of a fixed label under it, so changing the password signs everyone
   out and the browser stores nothing reusable.
 - **Phase 1 fakes**: `FakeCamera` cycles sample photos, `FakePrinter`
-  waits 1.5 s and the paper counter still comes down. The compose
-  handler is a no-op until phase 2, which is also why the sync, which
-  is real, has nothing to send yet.
+  waits 1.5 s and the paper counter still comes down.
 - **Ports**: Postgres 5436, booth 3100, worker 3101, chosen to stay
   clear of the other projects on this machine.
 - **The gallery is the event's site, not an app here.** There was an
@@ -276,25 +303,25 @@ compositor produces the print and web JPEGs from the same geometry and
   the camera's own frames. `packages/core/src/filters.ts` is the one
   catalogue: each filter is a `Look` (grayscale, sepia, saturate,
   contrast, brightness) that `cssFilter` turns into CSS for `Composite`
-  and the viewfinder today, and that phase 2's compositor applies
-  through sharp's equivalents, so the print matches the screen. Because
-  the choice comes after `composing`, phase 2 composes the print and web
-  JPEGs on `accepted` (or recomposes then), not before the review.
+  and the viewfinder, and that `applyLook` applies to pixels for the
+  compositor with the same arithmetic, so the print matches the screen.
+  Because the choice is made on the review, the JPEGs are composed on
+  `accepted`, after it.
   `booth.filters` is which ones the attendant offers; with one on offer
   the review shows no chips and every session gets that one.
   **Mirroring is the same shape**: the "Mirrored" switch beside the
   chips is a `mirror_chosen` event, `sessions.mirrored` is the choice,
   `Composite` draws the photos with `scaleX(-1)` (the overlay stays),
-  and phase 2's compositor flops them with sharp. Off by default: the
+  and the compositor flops them with sharp. Off by default: the
   true frame is what a DSLR gives, and text in the shot reads correctly.
 
 ## Phases
 
 1. **The whole interface, nothing hooked up** - done: this repo.
-2. **Compositor** - sharp behind the template loader; print and web JPEGs for any slot count.
+2. **Compositor** - done: print, web and thumbnail JPEGs for any slot count, composed on `accepted` (see **The compositor**). Text fields from the sidecar are not drawn yet.
 3. **Real camera** - `GPhoto2Camera`, MJPEG liveview, the stop-shoot-restart cycle, USB reconnect.
 4. **Printing** - CUPS (driverless IPP first, Gutenprint second), the queue, the paper counter.
-5. **Gallery and QR** - done, ahead of order, as the push to the event's site (see **The gallery**) and the wedding-planner's `/api/booth/photos` and `/i/booth/{id}`; it goes live the moment phase 2 fills `webPath`.
+5. **Gallery and QR** - done, ahead of order, as the push to the event's site (see **The gallery**) and the wedding-planner's `/api/booth/photos` and `/i/booth/{id}`.
 6. **Hardening** - systemd, a watchdog, recovery after a power cut, the 4-hour soak test.
 7. **Polish** - sounds, retake (modelled already, not on the review screen yet), final artwork, whatever the hallway tests turn up.
 

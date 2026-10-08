@@ -80,7 +80,7 @@ export function AttractScreen({
               const t = byId.get(s.templateId);
               return t ? (
                 <div key={`${s.id}-${i}`} className="h-[36dvh]" style={{ width: `calc(36dvh * ${t.width / t.height})` }}>
-                  <Composite template={t} photos={sessionPhotos(s.shots)} filter={s.filter} mirrored={s.mirrored} className="rounded-xl" />
+                  <Composite template={t} photos={sessionPhotos(s.shots)} composed={s.webUrl} filter={s.filter} mirrored={s.mirrored} className="rounded-xl" />
                 </div>
               ) : null;
             })}
@@ -534,6 +534,7 @@ export function DeliverScreen({
           <Composite
             template={template}
             photos={sessionPhotos(session.shots)}
+            composed={session.webUrl}
             filter={session.filter}
             mirrored={session.mirrored}
             className="rounded-xl shadow-[0_40px_80px_-30px_rgba(0,0,0,0.9)]"

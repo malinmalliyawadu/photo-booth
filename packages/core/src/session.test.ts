@@ -57,17 +57,19 @@ describe("the happy path", () => {
         expect(taken.state.shot).toBe(shot + 1);
         expect(kinds(taken.effects)).toEqual(["countdown"]);
       } else {
-        expect(taken.state.phase).toBe("composing");
-        expect(kinds(taken.effects)).toEqual(["compose", "timeout"]);
+        expect(taken.state.phase).toBe("review");
+        expect(kinds(taken.effects)).toEqual(["timeout"]);
       }
       state = taken.state;
     }
 
-    const review = step(state, { type: "composed" });
-    expect(review.state.phase).toBe("review");
-    expect(kinds(review.effects)).toEqual(["timeout"]);
+    // Accepting settles the look; the compositor runs on it.
+    const composing = step(state, { type: "accepted" });
+    expect(composing.state.phase).toBe("composing");
+    expect(composing.state.print).toBeNull();
+    expect(kinds(composing.effects)).toEqual(["compose", "timeout"]);
 
-    const delivering = step(review.state, { type: "accepted" });
+    const delivering = step(composing.state, { type: "composed" });
     expect(delivering.state.phase).toBe("delivering");
     expect(delivering.state.print).toBe("pending");
     expect(kinds(delivering.effects)).toEqual(["print", "sync", "timeout"]);
@@ -83,11 +85,11 @@ describe("the happy path", () => {
     expect(done.effects).toEqual([]);
   });
 
-  it("a one-shot layout composes straight after the first shot", () => {
+  it("a one-shot layout goes to the review straight after the first shot", () => {
     const { state } = start(1);
     const fired = step(state, { type: "countdown_elapsed", shot: 1 });
     const taken = step(fired.state, { type: "shot_taken", shot: 1 });
-    expect(taken.state.phase).toBe("composing");
+    expect(taken.state.phase).toBe("review");
   });
 });
 
@@ -119,9 +121,22 @@ describe("stale timing events", () => {
 });
 
 describe("commands in the wrong phase are refused", () => {
-  it("cannot accept before the composite exists", () => {
+  it("cannot accept before the photos are taken", () => {
     const { state } = start();
     expect(transition(state, { type: "accepted" }, T0)).toMatchObject({ ok: false });
+  });
+
+  it("cannot be composed except after the review", () => {
+    expect(transition(start().state, { type: "composed" }, T0)).toMatchObject({ ok: false });
+    expect(transition(reviewing(), { type: "composed" }, T0)).toMatchObject({ ok: false });
+    const delivering = step(step(reviewing(), { type: "accepted" }).state, { type: "composed" }).state;
+    expect(transition(delivering, { type: "composed" }, T0)).toMatchObject({ ok: false });
+  });
+
+  it("cannot accept twice", () => {
+    const composing = step(reviewing(), { type: "accepted" }).state;
+    expect(transition(composing, { type: "accepted" }, T0)).toMatchObject({ ok: false });
+    expect(transition(composing, { type: "retake" }, T0)).toMatchObject({ ok: false });
   });
 
   it("cannot finish twice", () => {
@@ -129,8 +144,8 @@ describe("commands in the wrong phase are refused", () => {
     const s = [
       { type: "countdown_elapsed", shot: 1 },
       { type: "shot_taken", shot: 1 },
-      { type: "composed" },
       { type: "accepted" },
+      { type: "composed" },
       { type: "finished" },
     ].reduce((st, ev) => step(st, ev as SessionEvent).state, state);
     expect(s.phase).toBe("done");
@@ -185,8 +200,8 @@ describe("failures", () => {
     const s = [
       { type: "countdown_elapsed", shot: 1 },
       { type: "shot_taken", shot: 1 },
-      { type: "composed" },
       { type: "accepted" },
+      { type: "composed" },
       { type: "print_failed", reason: "jam" },
     ].reduce((st, ev) => step(st, ev as SessionEvent).state, state);
     expect(s.phase).toBe("delivering");
@@ -198,10 +213,15 @@ describe("failures", () => {
     const s = [
       { type: "countdown_elapsed", shot: 1 },
       { type: "shot_taken", shot: 1 },
+      { type: "accepted" },
       { type: "compose_failed", reason: "sharp blew up" },
     ].reduce((st, ev) => step(st, ev as SessionEvent).state, state);
     expect(s.phase).toBe("failed");
     expect(s.reason).toBe("sharp blew up");
+  });
+
+  it("a compose failure after the session moved on is ignored", () => {
+    expect(transition(reviewing(), { type: "compose_failed", reason: "late" }, T0)).toMatchObject({ ok: true, stale: true });
   });
 });
 
@@ -211,17 +231,12 @@ describe("timeouts move a stalled session along", () => {
     return [
       { type: "countdown_elapsed", shot: 1 },
       { type: "shot_taken", shot: 1 },
-      { type: "composed" },
     ].reduce((st, ev) => step(st, ev as SessionEvent).state, state);
   }
 
   it("arms the review timeout for the documented duration", () => {
     const { state } = start(1);
-    const composing = step(
-      step(state, { type: "countdown_elapsed", shot: 1 }).state,
-      { type: "shot_taken", shot: 1 },
-    );
-    const review = step(composing.state, { type: "composed" }, T0);
+    const review = step(step(state, { type: "countdown_elapsed", shot: 1 }).state, { type: "shot_taken", shot: 1 }, T0);
     expect(review.effects).toEqual([
       { kind: "timeout", phase: "review", shot: 1, at: later(TIMEOUTS_MS.review) },
     ]);
@@ -229,12 +244,35 @@ describe("timeouts move a stalled session along", () => {
 
   it("a guest who walks away from the review still gets a print and a QR", () => {
     const timed = step(atReview(), { type: "timed_out", phase: "review", shot: 1 });
-    expect(timed.state.phase).toBe("delivering");
-    expect(kinds(timed.effects)).toEqual(["print", "sync", "timeout"]);
+    expect(timed.state.phase).toBe("composing");
+    expect(timed.effects).toEqual([
+      { kind: "compose" },
+      { kind: "timeout", phase: "composing", shot: 1, at: later(TIMEOUTS_MS.composing) },
+    ]);
+    const delivering = step(timed.state, { type: "composed" });
+    expect(delivering.state.phase).toBe("delivering");
+    expect(kinds(delivering.effects)).toEqual(["print", "sync", "timeout"]);
+  });
+
+  it("a review timeout after the guest accepted is stale", () => {
+    const composing = step(atReview(), { type: "accepted" }).state;
+    expect(transition(composing, { type: "timed_out", phase: "review", shot: 1 }, T0)).toMatchObject({ stale: true });
+  });
+
+  it("a compositor that never answers fails the session", () => {
+    const composing = step(atReview(), { type: "accepted" }).state;
+    const timed = step(composing, { type: "timed_out", phase: "composing", shot: 1 });
+    expect(timed.state.phase).toBe("failed");
+    expect(timed.state.reason).toMatch(/did not finish in time/);
+  });
+
+  it("the guest can still walk away while the photos are put together", () => {
+    const composing = step(atReview(), { type: "accepted" }).state;
+    expect(step(composing, { type: "cancelled", reason: "guest tapped back" }).state.phase).toBe("abandoned");
   });
 
   it("a QR screen nobody dismissed goes back to idle", () => {
-    const delivering = step(atReview(), { type: "accepted" }).state;
+    const delivering = step(step(atReview(), { type: "accepted" }).state, { type: "composed" }).state;
     const timed = step(delivering, { type: "timed_out", phase: "delivering", shot: 1 });
     expect(timed.state.phase).toBe("done");
   });
@@ -251,8 +289,7 @@ describe("timeouts move a stalled session along", () => {
 function reviewing() {
   let { state } = start(1);
   state = step(state, { type: "countdown_elapsed", shot: 1 }).state;
-  state = step(state, { type: "shot_taken", shot: 1 }).state;
-  return step(state, { type: "composed" }).state;
+  return step(state, { type: "shot_taken", shot: 1 }).state;
 }
 
 describe("filter_chosen", () => {
@@ -273,8 +310,8 @@ describe("filter_chosen", () => {
   it("is refused anywhere else", () => {
     const { state } = start();
     expect(transition(state, { type: "filter_chosen", filter: "mono" }, T0)).toMatchObject({ ok: false });
-    const delivering = step(reviewing(), { type: "accepted" }).state;
-    expect(transition(delivering, { type: "filter_chosen", filter: "mono" }, T0)).toMatchObject({ ok: false });
+    const composing = step(reviewing(), { type: "accepted" }).state;
+    expect(transition(composing, { type: "filter_chosen", filter: "mono" }, T0)).toMatchObject({ ok: false });
   });
 
   it("survives a retake and the rest of the session", () => {
@@ -301,8 +338,8 @@ describe("mirror_chosen", () => {
   it("is refused anywhere else", () => {
     const { state } = start();
     expect(transition(state, { type: "mirror_chosen", mirrored: true }, T0)).toMatchObject({ ok: false });
-    const delivering = step(reviewing(), { type: "accepted" }).state;
-    expect(transition(delivering, { type: "mirror_chosen", mirrored: true }, T0)).toMatchObject({ ok: false });
+    const composing = step(reviewing(), { type: "accepted" }).state;
+    expect(transition(composing, { type: "mirror_chosen", mirrored: true }, T0)).toMatchObject({ ok: false });
   });
 
   it("survives a retake and the rest of the session", () => {

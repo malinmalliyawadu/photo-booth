@@ -1,4 +1,5 @@
 export * from "./camera";
+export * from "./compositor";
 export * from "./filters";
 export * from "./gallery";
 export * from "./kiosk-capture";
