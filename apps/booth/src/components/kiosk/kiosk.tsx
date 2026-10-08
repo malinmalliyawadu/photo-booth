@@ -102,6 +102,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
             filters={booth.filters}
             busy={busy}
             onFilter={(filter: FilterId) => command(url("filter"), { filter })}
+            onMirror={(mirrored: boolean) => command(url("mirror"), { mirrored })}
             onAccept={() => command(url("accept"))}
             onRetake={() => command(url("retake"))}
             onCancel={() => command(url("cancel"))}

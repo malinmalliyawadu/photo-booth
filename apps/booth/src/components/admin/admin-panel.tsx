@@ -455,7 +455,7 @@ function SessionRow({
   return (
     <div className={`flex items-center gap-3 border-t border-night-edge py-3 first:border-t-0 ${live ? "rounded-lg bg-ember-tint/40 px-2" : ""}`} data-testid={`session-${s.id}`}>
       {template && s.shots.length > 0 ? (
-        <Composite template={template} photos={sessionPhotos(s.shots)} filter={s.filter} className="w-20 shrink-0 rounded-md" />
+        <Composite template={template} photos={sessionPhotos(s.shots)} filter={s.filter} mirrored={s.mirrored} className="w-20 shrink-0 rounded-md" />
       ) : (
         <div className="flex h-14 w-20 shrink-0 items-center justify-center rounded-md bg-night text-cream-faint">
           <Camera className="h-5 w-5" />
@@ -470,6 +470,7 @@ function SessionRow({
         <p className="text-cream-soft">
           {PHASE_LABEL[s.phase]}
           {s.filter !== "colour" ? `, ${filterById(s.filter).name.toLowerCase()}` : ""}
+          {s.mirrored ? ", mirrored" : ""}
           {s.print ? `, ${PRINT_LABEL[s.print].toLowerCase()}` : ""}
           {s.printCount > 1 ? ` (${s.printCount} prints)` : ""}
           {s.syncedAt ? ", synced" : ""}

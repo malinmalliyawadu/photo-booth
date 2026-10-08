@@ -247,14 +247,15 @@ describe("timeouts move a stalled session along", () => {
   });
 });
 
-describe("filter_chosen", () => {
-  function reviewing() {
-    let { state } = start(1);
-    state = step(state, { type: "countdown_elapsed", shot: 1 }).state;
-    state = step(state, { type: "shot_taken", shot: 1 }).state;
-    return step(state, { type: "composed" }).state;
-  }
+/** A one-shot session on the review screen. */
+function reviewing() {
+  let { state } = start(1);
+  state = step(state, { type: "countdown_elapsed", shot: 1 }).state;
+  state = step(state, { type: "shot_taken", shot: 1 }).state;
+  return step(state, { type: "composed" }).state;
+}
 
+describe("filter_chosen", () => {
   it("starts in the camera's colours unless told otherwise", () => {
     expect(start().state.filter).toBe("colour");
     expect(beginSession({ shotCount: 1, countdownSeconds: 5, filter: "mono" }, T0).state.filter).toBe("mono");
@@ -280,5 +281,33 @@ describe("filter_chosen", () => {
     const chosen = step(reviewing(), { type: "filter_chosen", filter: "vintage" }).state;
     expect(step(chosen, { type: "retake" }).state.filter).toBe("vintage");
     expect(step(chosen, { type: "accepted" }).state.filter).toBe("vintage");
+  });
+});
+
+describe("mirror_chosen", () => {
+  it("starts the right way round", () => {
+    expect(start().state.mirrored).toBe(false);
+  });
+
+  it("flips the photos on the review screen, and back, with nothing to do", () => {
+    const state = reviewing();
+    const flipped = step(state, { type: "mirror_chosen", mirrored: true });
+    expect(flipped.state.mirrored).toBe(true);
+    expect(flipped.state.phase).toBe("review");
+    expect(flipped.effects).toEqual([]);
+    expect(step(flipped.state, { type: "mirror_chosen", mirrored: false }).state.mirrored).toBe(false);
+  });
+
+  it("is refused anywhere else", () => {
+    const { state } = start();
+    expect(transition(state, { type: "mirror_chosen", mirrored: true }, T0)).toMatchObject({ ok: false });
+    const delivering = step(reviewing(), { type: "accepted" }).state;
+    expect(transition(delivering, { type: "mirror_chosen", mirrored: true }, T0)).toMatchObject({ ok: false });
+  });
+
+  it("survives a retake and the rest of the session", () => {
+    const flipped = step(reviewing(), { type: "mirror_chosen", mirrored: true }).state;
+    expect(step(flipped, { type: "retake" }).state.mirrored).toBe(true);
+    expect(step(flipped, { type: "accepted" }).state.mirrored).toBe(true);
   });
 });

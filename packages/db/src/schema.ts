@@ -91,6 +91,8 @@ export const sessions = pgTable(
       .references(() => templates.id),
     /** The look the guest picked, applied wherever the photos are drawn. */
     filter: text("filter").$type<FilterId>().notNull().default("colour"),
+    /** Drawn flipped, the way the mirror showed the guest; the files are never flipped. */
+    mirrored: boolean("mirrored").notNull().default(false),
     phase: text("phase").$type<Phase>().notNull(),
     shot: integer("shot").notNull(),
     shotCount: integer("shot_count").notNull(),

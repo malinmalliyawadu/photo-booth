@@ -11,6 +11,8 @@ test.afterAll(async ({ request }) => {
 });
 
 const MONO_CSS = "grayscale(1) contrast(1.08) brightness(1.02)";
+/** scaleX(-1), as the browser reports it. */
+const MIRROR_CSS = "matrix(-1, 0, 0, 1, 0, 0)";
 
 test("a guest walks the booth from tap to QR", async ({ page, request }) => {
   await page.goto("/");
@@ -46,14 +48,29 @@ test("a guest walks the booth from tap to QR", async ({ page, request }) => {
   await page.getByTestId("filter-mono").click();
   await expect(page.getByTestId("filter-mono")).toHaveAttribute("aria-checked", "true");
   const photo = page.getByTestId("review").locator(`img[src="${reviewed.session!.shots[0]!.url}"]`).first();
+  const overlay = page.getByTestId("review").locator(`img[src="${layout!.screenUrl}"]`);
   await expect(photo).toHaveCSS("filter", MONO_CSS);
-  await expect(page.getByTestId("review").locator(`img[src="${layout!.screenUrl}"]`)).toHaveCSS("filter", "none");
+  await expect(overlay).toHaveCSS("filter", "none");
   await expect.poll(async () => (await snapshot(request)).session?.filter).toBe("mono");
+
+  // Flipping is the same kind of choice: a switch beside the chips, a
+  // transform on the photos as drawn, nothing on the overlay or the files.
+  expect(reviewed.session?.mirrored).toBe(false);
+  await expect(photo).toHaveCSS("transform", "none");
+  await expect(page.getByTestId("mirror")).toHaveAttribute("aria-checked", "false");
+  await page.getByTestId("mirror").click();
+  await expect(page.getByTestId("mirror")).toHaveAttribute("aria-checked", "true");
+  await expect(photo).toHaveCSS("transform", MIRROR_CSS);
+  await expect(photo).toHaveCSS("filter", MONO_CSS);
+  await expect(overlay).toHaveCSS("transform", "none");
+  await expect.poll(async () => (await snapshot(request)).session?.mirrored).toBe(true);
 
   await page.getByTestId("accept").click();
   await expect(page.getByTestId("deliver")).toBeVisible();
   await expect(page.getByTestId("qr")).toBeVisible();
-  await expect(page.getByTestId("deliver").locator(`img[src="${reviewed.session!.shots[0]!.url}"]`).first()).toHaveCSS("filter", MONO_CSS);
+  const delivered1 = page.getByTestId("deliver").locator(`img[src="${reviewed.session!.shots[0]!.url}"]`).first();
+  await expect(delivered1).toHaveCSS("filter", MONO_CSS);
+  await expect(delivered1).toHaveCSS("transform", MIRROR_CSS);
   await expect(page.getByTestId("print-status")).toHaveText(/in the tray/);
 
   const delivered = await snapshot(request);
@@ -68,6 +85,7 @@ test("a guest walks the booth from tap to QR", async ({ page, request }) => {
   expect(after.recent[0]?.id).toBe(reviewed.session!.id);
   expect(after.recent[0]?.phase).toBe("done");
   expect(after.recent[0]?.filter).toBe("mono");
+  expect(after.recent[0]?.mirrored).toBe(true);
 });
 
 test("starting over returns to the attract loop", async ({ page, request }) => {
@@ -103,7 +121,7 @@ test("a locked layout skips the picker", async ({ page, request }) => {
   await expect(page.getByTestId("review")).toBeVisible();
 });
 
-test("a filter survives a retake, and one filter on offer asks nothing", async ({ page, request }) => {
+test("a filter and the mirror survive a retake, and one filter on offer asks nothing", async ({ page, request }) => {
   await page.goto("/");
   await page.getByTestId("attract").click();
   const s = await snapshot(request);
@@ -112,18 +130,25 @@ test("a filter survives a retake, and one filter on offer asks nothing", async (
   await expect(page.getByTestId("review")).toBeVisible();
   await page.getByTestId("filter-vintage").click();
   await expect.poll(async () => (await snapshot(request)).session?.filter).toBe("vintage");
+  await page.getByTestId("mirror").click();
+  await expect.poll(async () => (await snapshot(request)).session?.mirrored).toBe(true);
 
-  // The retake is posed through the chosen look and comes back with it.
+  // The retake is posed through the chosen look and comes back with it,
+  // and the mirror is kept too.
   await page.getByRole("button", { name: "Retake" }).click();
   await expect(page.getByTestId("live")).toHaveAttribute("data-filter", "vintage");
+  await expect(page.getByTestId("live")).toHaveAttribute("data-mirrored", "true");
   await expect(page.getByTestId("review")).toBeVisible();
   await expect(page.getByTestId("review")).toHaveAttribute("data-filter", "vintage");
   await expect(page.getByTestId("filter-vintage")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("mirror")).toHaveAttribute("aria-checked", "true");
 
-  // The attendant narrows the offer to one: the chips go, the session
-  // keeps what it has, and the next session gets that one.
+  // The attendant narrows the offer to one: the chips go, the mirror
+  // switch stays, the session keeps what it has, and the next session
+  // gets that one filter.
   await request.patch("/api/admin/booth", { data: { filters: ["mono"] } });
   await expect(page.getByTestId("filters")).toHaveCount(0);
+  await expect(page.getByTestId("mirror")).toBeVisible();
   await expect(page.getByTestId("review")).toHaveAttribute("data-filter", "vintage");
   await page.getByRole("button", { name: "Start over" }).click();
   await expect(page.getByTestId("attract")).toBeVisible();
@@ -135,7 +160,7 @@ test("a filter survives a retake, and one filter on offer asks nothing", async (
   expect((await snapshot(request)).session?.filter).toBe("mono");
 });
 
-test("the API refuses a filter the booth does not offer, or one chosen too late", async ({ request }) => {
+test("the API refuses a filter the booth does not offer, or a filter or mirror chosen too late", async ({ request }) => {
   await request.patch("/api/admin/booth", { data: { filters: ["pop", "colour", "colour"] } });
   // Stored tidy: catalogue order, no duplicates.
   expect((await snapshot(request)).booth.filters).toEqual(["colour", "pop"]);
@@ -150,6 +175,8 @@ test("the API refuses a filter the booth does not offer, or one chosen too late"
   // Too early: the photo is not taken yet.
   const early = await request.post(`/api/sessions/${id}/filter`, { data: { filter: "pop" } });
   expect(early.status()).toBe(409);
+  const earlyMirror = await request.post(`/api/sessions/${id}/mirror`, { data: { mirrored: true } });
+  expect(earlyMirror.status()).toBe(409);
   await expect.poll(async () => (await snapshot(request)).session?.phase, { timeout: 20_000 }).toBe("review");
 
   const refused = await request.post(`/api/sessions/${id}/filter`, { data: { filter: "mono" } });
@@ -160,10 +187,17 @@ test("the API refuses a filter the booth does not offer, or one chosen too late"
   const ok = await request.post(`/api/sessions/${id}/filter`, { data: { filter: "pop" } });
   expect(ok.status()).toBe(200);
   expect((await snapshot(request)).session?.filter).toBe("pop");
+  const notABoolean = await request.post(`/api/sessions/${id}/mirror`, { data: { mirrored: "yes" } });
+  expect(notABoolean.status()).toBe(400);
+  const flipped = await request.post(`/api/sessions/${id}/mirror`, { data: { mirrored: true } });
+  expect(flipped.status()).toBe(200);
+  expect((await snapshot(request)).session?.mirrored).toBe(true);
 
   // Too late: the print is on its way.
   await request.post(`/api/sessions/${id}/accept`);
   const late = await request.post(`/api/sessions/${id}/filter`, { data: { filter: "colour" } });
   expect(late.status()).toBe(409);
-  expect((await snapshot(request)).session?.filter).toBe("pop");
+  const lateMirror = await request.post(`/api/sessions/${id}/mirror`, { data: { mirrored: false } });
+  expect(lateMirror.status()).toBe(409);
+  expect((await snapshot(request)).session).toMatchObject({ filter: "pop", mirrored: true });
 });
