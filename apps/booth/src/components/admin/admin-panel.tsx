@@ -36,7 +36,7 @@ export function AdminPanel({ initial }: { initial: Snapshot }) {
 
   return (
     <main className="min-h-dvh bg-night pb-24 text-cream">
-      <div className="mx-auto max-w-xl px-4 pt-6">
+      <div className="mx-auto max-w-xl px-4 pt-safe-6">
         <header className="flex items-start justify-between gap-4">
           <div>
             <p className="eyebrow">Booth admin</p>

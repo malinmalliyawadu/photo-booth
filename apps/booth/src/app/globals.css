@@ -79,6 +79,19 @@
   }
 }
 
+/*
+ * Opened from the iPad's home screen, the status bar is drawn over the
+ * page (black-translucent) and the home indicator sits over its foot.
+ * These add the inset to a screen's own padding; in a Safari tab the
+ * insets are zero and nothing moves.
+ */
+@utility pt-safe-* {
+  padding-top: calc(--spacing(--value(integer)) + env(safe-area-inset-top));
+}
+@utility pb-safe-* {
+  padding-bottom: calc(--spacing(--value(integer)) + env(safe-area-inset-bottom));
+}
+
 @layer base {
   html {
     background: var(--color-night);

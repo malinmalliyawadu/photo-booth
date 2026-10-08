@@ -37,6 +37,7 @@ between a change in `core` and the app seeing it.
 - `cp .env.example .env` then set `ADMIN_PASSWORD`
 - `pnpm db:migrate`, `pnpm db:seed` - the seed is idempotent and the worker runs it on start
 - `pnpm assets` - regenerates the placeholder templates and sample photos (sharp)
+- `pnpm icons` - rasterises `apps/booth/src/app/icon.svg` into the home-screen PNGs; commit them
 - `pnpm dev` - booth app over **HTTPS on 3100** plus the worker; `pnpm --filter @booth/booth dev:http` for a browser that will not trust the private CA
 - `pnpm test` - Vitest, every pure module
 - `pnpm typecheck`, `pnpm lint` - every package
@@ -193,6 +194,14 @@ compositor produces the print and web JPEGs from the same geometry and
   reaches the kiosk; `/admin` stays behind the password. Pages that
   read runtime secrets must be dynamic, because the image is built
   without them.
+- **The kiosk installs to the home screen.** `app/manifest.ts` asks for
+  `fullscreen`, which iPadOS shows as standalone with the status bar
+  drawn over the page (`black-translucent`); the screens pad around it
+  with `pt-safe-*` / `pb-safe-*` (globals.css), which are their usual
+  padding in a Safari tab. There is no service worker on purpose: the
+  kiosk is useless without the controller, and a cached shell would
+  serve a stale kiosk after a deploy. A home-screen app has its own
+  camera permission and cookies, separate from Safari's.
 - **The dev `.env` lives at the repo root** and is read by the worker,
   the db scripts and (through `next.config.ts`) the app.
 - **Delete on request** keeps the session row for the numbering and the

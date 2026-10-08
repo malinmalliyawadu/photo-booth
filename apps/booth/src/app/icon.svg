@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!--
+    The booth's icon: the one warm lamp in a dark room, drawn as a lens.
+    Source of every icon size; `pnpm icons` rasterises it. Everything
+    sits inside the maskable safe zone (a centred circle of radius 205),
+    so Android may crop it to any shape.
+  -->
+  <defs>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#e8743b" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#e8743b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="#0f1113"/>
+  <circle cx="256" cy="256" r="240" fill="url(#glow)"/>
+  <circle cx="256" cy="256" r="150" fill="#e8743b"/>
+  <circle cx="256" cy="256" r="94" fill="#0f1113"/>
+  <circle cx="256" cy="256" r="58" fill="#22262c"/>
+  <circle cx="228" cy="228" r="17" fill="#f3ede2"/>
+</svg>
