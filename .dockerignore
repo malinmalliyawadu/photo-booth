@@ -1,0 +1,16 @@
+# The gallery image builds from the repository root (apps/gallery/Dockerfile).
+# Keep installs, builds, runtime data and secrets out of the context.
+.git
+.claude
+node_modules
+**/node_modules
+**/.next
+**/out
+**/*.tsbuildinfo
+.env
+.env.*
+!.env.example
+data
+ops/certs
+e2e/test-results
+e2e/playwright-report

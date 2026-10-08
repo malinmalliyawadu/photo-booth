@@ -19,7 +19,7 @@ Vitest for pure modules, Playwright for the kiosk's happy path.
 | Path | What it is | Runs on |
 | --- | --- | --- |
 | `apps/booth` | Next.js: kiosk (`/`), admin (`/admin`), slideshow (`/slideshow`), the session API, the SSE stream, `/media` | The controller |
-| `apps/gallery` | Next.js: one page per session, the all-photos page, the sync endpoint (phase 5; a stub today) | Coolify |
+| `apps/gallery` | Next.js: one page per session, the all-photos page, the sync endpoint (phase 5; a stub today); `Dockerfile` builds it from the repo root | Coolify |
 | `packages/worker` | Node process: camera, compositor, print queue, cloud sync, the jobs loop | The controller |
 | `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants, the `Camera` interface | Both apps and the worker |
 | `packages/db` | Drizzle schema + migrations, the repositories, the data directory, the snapshot | Both apps and the worker |
@@ -151,6 +151,15 @@ compositor produces the print and web JPEGs from the same geometry and
   marks the session synced. The compose handler is a no-op until phase 2.
 - **Ports**: Postgres 5436, booth 3100, worker 3101, gallery 3200,
   chosen to stay clear of the other projects on this machine.
+- **The gallery ships as a Docker image**, not through Coolify's
+  Nixpacks: `apps/gallery/Dockerfile` installs only `@booth/gallery`
+  and `@booth/core` from the workspace, runs `next build` with
+  `output: "standalone"`, and copies the traced server into a
+  `node:24-alpine` runner as a non-root user on 3200. The build context
+  is the repo root (`.dockerignore` keeps data, certs and `.env` out),
+  which in Coolify is Base Directory `/` and Dockerfile Location
+  `/apps/gallery/Dockerfile`. It binds `::` so a health check against
+  `localhost` works whether that resolves to IPv4 or IPv6.
 - **The dev `.env` lives at the repo root** and is read by the worker,
   the db scripts and (through `next.config.ts`) the app.
 - **Delete on request** keeps the session row for the numbering and the

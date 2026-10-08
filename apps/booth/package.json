@@ -7,7 +7,7 @@
     "certs": "test -f ../../ops/certs/booth.crt || ../../ops/ca.sh",
     "build": "next build",
     "start": "next start -p 3100",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "next typegen && tsc -p tsconfig.json",
     "lint": "eslint",
     "dev:http": "next dev -p \"${PORT:-3100}\""
   },
