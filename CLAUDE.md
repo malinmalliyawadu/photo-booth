@@ -207,6 +207,12 @@ compositor produces the print and web JPEGs from the same geometry and
   the db scripts and (through `next.config.ts`) the app.
 - **Delete on request** keeps the session row for the numbering and the
   admin history, removes the shots and files, and drops pending jobs.
+- **Deleting a layout** removes it outright when no session used it.
+  One that sessions were taken with is retired instead (`deletedAt`):
+  switched off, hidden from admin and the picker, unlocked if it was
+  the locked one, and kept with its overlay so those sessions still
+  draw. The seed records every file it loads in `seeded_templates`, so
+  a deleted or renamed seed layout does not come back on the next start.
 - **Reprint** is a plain `print` job with `reprint: true`; it does not
   touch the session's phase.
 

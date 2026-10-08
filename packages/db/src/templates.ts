@@ -1,4 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { writeFile } from "node:fs/promises";
 import sharp, { type OutputInfo } from "sharp";
 import {
@@ -13,7 +13,7 @@ import {
 } from "@booth/core";
 import { db, type Db } from "./client";
 import { notify } from "./notify";
-import { templates, type TemplateRow } from "./schema";
+import { booth, templates, type TemplateRow } from "./schema";
 import { ensureDir, removeData, resolveData, templatePaths } from "./storage";
 
 /** The widest the kiosk ever shows a template, so the overlay it loads can be smaller than the print. */
@@ -97,6 +97,7 @@ export async function ingestTemplate(input: {
   });
 }
 
+/** Deleted layouts included: the sessions taken with one still draw it. */
 export async function listTemplates(dbOrTx: Db = db): Promise<TemplateRow[]> {
   return dbOrTx.query.templates.findMany({ orderBy: [asc(templates.sortOrder), asc(templates.createdAt)] });
 }
@@ -106,24 +107,36 @@ export async function updateTemplate(
   patch: Partial<Pick<TemplateRow, "name" | "active" | "sortOrder">>,
 ): Promise<TemplateRow> {
   return db.transaction(async (tx) => {
-    const [row] = await tx.update(templates).set(patch).where(eq(templates.id, id)).returning();
+    const [row] = await tx
+      .update(templates)
+      .set(patch)
+      .where(and(eq(templates.id, id), isNull(templates.deletedAt)))
+      .returning();
     if (!row) throw new TemplateError("No such layout");
     await notify(tx);
     return row;
   });
 }
 
-/** Refused while a session still references it; deactivate instead. */
+/**
+ * A layout no session used goes for good, files and all. One that
+ * sessions were taken with is retired instead: switched off and hidden,
+ * with its row and overlay kept so those sessions still draw.
+ */
 export async function deleteTemplate(id: string): Promise<void> {
-  await db.transaction(async (tx) => {
+  const retired = await db.transaction(async (tx) => {
     const [used] = await tx.execute<{ n: string }>(sql`select count(*) as n from sessions where template_id = ${id}`).then((r) => r.rows);
-    if (Number(used?.n ?? 0) > 0) {
-      throw new TemplateError("Sessions were taken with this layout; switch it off instead of deleting it");
-    }
-    const deleted = await tx.delete(templates).where(eq(templates.id, id)).returning({ id: templates.id });
-    if (deleted.length === 0) throw new TemplateError("No such layout");
+    const retire = Number(used?.n ?? 0) > 0;
+    const where = and(eq(templates.id, id), isNull(templates.deletedAt));
+    const done = retire
+      ? await tx.update(templates).set({ active: false, deletedAt: new Date() }).where(where).returning({ id: templates.id })
+      : await tx.delete(templates).where(where).returning({ id: templates.id });
+    if (done.length === 0) throw new TemplateError("No such layout");
+    await tx.update(booth).set({ lockedTemplateId: null, updatedAt: new Date() }).where(eq(booth.lockedTemplateId, id));
     await notify(tx);
+    return retire;
   });
+  if (retired) return;
   await Promise.all([
     removeData(templatePaths.png(id)),
     removeData(templatePaths.overlay(id)),

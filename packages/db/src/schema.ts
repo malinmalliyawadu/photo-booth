@@ -61,6 +61,20 @@ export const templates = pgTable("templates", {
   active: boolean("active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamptz("created_at").notNull().defaultNow(),
+  /**
+   * Deleted by the attendant while sessions still use it: gone from admin
+   * and the picker, kept (row and overlay) so those sessions still draw.
+   */
+  deletedAt: timestamptz("deleted_at"),
+});
+
+/**
+ * Every file under templates/ the seed has loaded, so a layout the
+ * attendant deleted or renamed is not loaded again on the next start.
+ */
+export const seededTemplates = pgTable("seeded_templates", {
+  file: text("file").primaryKey(),
+  seededAt: timestamptz("seeded_at").notNull().defaultNow(),
 });
 
 export const sessions = pgTable(
