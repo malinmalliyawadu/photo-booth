@@ -31,7 +31,7 @@ import { printerFor } from "./printer";
 const WORKER_ID = `${hostname()}:${process.pid}`;
 const POLL_MS = 250;
 const HEARTBEAT_MS = 5000;
-const HTTP_PORT = Number(process.env.WORKER_PORT ?? 3101);
+const HTTP_PORT = Number(process.env.WORKER_PORT ?? process.env.PORT ?? 3101);
 
 const log = (msg: string) => console.log(`[worker] ${new Date().toISOString()} ${msg}`);
 
