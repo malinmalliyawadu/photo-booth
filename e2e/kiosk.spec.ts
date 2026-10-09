@@ -89,7 +89,8 @@ test("a guest walks the booth from tap to QR", async ({ page, request }) => {
 
   const delivered = await snapshot(request);
   expect(delivered.session?.print).toBe("printed");
-  expect(delivered.booth.paperLeft).toBe(35);
+  expect(delivered.booth.paperLeft).toBe(17);
+  expect(delivered.booth.inkLeft).toBe(35);
 
   await page.getByTestId("done").click();
   await expect(page.getByTestId("attract")).toBeVisible();
@@ -133,6 +134,37 @@ test("a locked layout skips the picker", async ({ page, request }) => {
   await expect(page.getByTestId("live")).toBeVisible();
   await expect(page.getByTestId("shot-label")).toHaveText("Photo 1 of 1");
   await expect(page.getByTestId("review")).toBeVisible();
+});
+
+test("an empty paper tray skips the print, and a print that finishes after Done is still recorded", async ({ page, request }) => {
+  const s = await snapshot(request);
+  const layout = s.templates.find((t) => t.active && t.shotCount === 1)!;
+  await request.patch("/api/admin/booth", { data: { lockedTemplateId: layout.id, paperLeft: 0 } });
+  await page.goto("/");
+  await page.getByTestId("attract").click();
+  await expect(page.getByTestId("review")).toBeVisible();
+  await page.getByRole("button", { name: "Print it" }).click();
+  await expect(page.getByTestId("print-status")).toHaveText(/needs a refill/);
+  const skipped = await snapshot(request);
+  expect(skipped.session?.print).toBe("skipped");
+  expect(skipped.booth).toMatchObject({ paperLeft: 0, inkLeft: 36 });
+
+  // Refilled. This guest taps Done at once, before the print is out:
+  // the print still lands on the session, and the paper and ink come down.
+  await request.patch("/api/admin/booth", { data: { paperLeft: 18 } });
+  await page.getByTestId("done").click();
+  await expect(page.getByTestId("attract")).toBeVisible();
+  await page.getByTestId("attract").click();
+  await expect(page.getByTestId("review")).toBeVisible();
+  await page.getByRole("button", { name: "Print it" }).click();
+  await expect(page.getByTestId("deliver")).toBeVisible();
+  const id = (await snapshot(request)).session!.id;
+  await page.getByTestId("done").click();
+  await expect(page.getByTestId("attract")).toBeVisible();
+  await expect
+    .poll(async () => (await snapshot(request)).recent.find((r) => r.id === id)?.print)
+    .toBe("printed");
+  expect((await snapshot(request)).booth).toMatchObject({ paperLeft: 17, inkLeft: 35 });
 });
 
 test("a filter and the mirror survive a retake, and one filter on offer asks nothing", async ({ page, request }) => {

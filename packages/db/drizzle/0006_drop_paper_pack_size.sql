@@ -1,0 +1,1 @@
+ALTER TABLE "booth" DROP COLUMN "paper_pack_size";

@@ -20,8 +20,12 @@ export interface Snapshot {
     paused: boolean;
     cameraMode: CameraMode;
     countdownSeconds: number;
+    /** Postcards in the paper tray, and how many it holds. */
     paperLeft: number;
-    paperPackSize: number;
+    paperTraySize: number;
+    /** Prints left on the ink cassette, and how many a new one has. */
+    inkLeft: number;
+    inkCassetteSize: number;
     lockedTemplateId: string | null;
     /** The filters the kiosk offers, in the order it shows them. */
     filters: FilterId[];
@@ -139,7 +143,9 @@ export async function readSnapshot(): Promise<Snapshot> {
       cameraMode: settings.cameraMode,
       countdownSeconds: settings.countdownSeconds,
       paperLeft: settings.paperLeft,
-      paperPackSize: settings.paperPackSize,
+      paperTraySize: settings.paperTraySize,
+      inkLeft: settings.inkLeft,
+      inkCassetteSize: settings.inkCassetteSize,
       lockedTemplateId: settings.lockedTemplateId,
       filters: offeredFilters(settings.filters),
     },

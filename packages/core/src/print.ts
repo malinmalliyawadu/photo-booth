@@ -27,3 +27,24 @@ export const SAFE_MARGIN_MM = 4;
 
 /** Below this a "slot" is more likely a stray magenta pixel than a photo. */
 export const MIN_SLOT_MM = 10;
+
+/**
+ * What one KP-108IN / RP-108 pack is made of, as the SELPHY CP1300
+ * uses it: an ink cassette lasts 36 prints, and the paper tray holds 18
+ * postcards, so the tray is refilled twice per cassette. The booth
+ * counts both down, because the printer only says it is out once a
+ * guest's print has failed.
+ */
+export const PAPER_TRAY_SHEETS = 18;
+export const INK_CASSETTE_PRINTS = 36;
+
+/** At or below these the admin page says "Low". */
+export const PAPER_LOW = 3;
+export const INK_LOW = 5;
+
+/** Why the next print cannot go, or null when it can. */
+export function printBlocker(supplies: { paperLeft: number; inkLeft: number }): string | null {
+  if (supplies.inkLeft <= 0) return "The ink cassette is used up";
+  if (supplies.paperLeft <= 0) return "The paper tray is empty";
+  return null;
+}

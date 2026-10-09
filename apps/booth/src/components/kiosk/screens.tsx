@@ -569,7 +569,7 @@ function printLine(session: SessionView): { text: string; tone: string; icon: Re
     case "failed":
       return { text: "The print did not come out; the attendant can print it again", tone: "text-rose", icon: <Printer className="h-6 w-6" /> };
     case "skipped":
-      return { text: "Out of paper right now; your photos are safe", tone: "text-gold", icon: <Printer className="h-6 w-6" /> };
+      return { text: "The printer needs a refill; your photos are safe", tone: "text-gold", icon: <Printer className="h-6 w-6" /> };
     default:
       return {
         text: "Printing your copy",

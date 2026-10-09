@@ -19,7 +19,8 @@
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "assets": "tsx scripts/make-sample-assets.ts",
-    "icons": "tsx scripts/make-icons.ts"
+    "icons": "tsx scripts/make-icons.ts",
+    "print:test": "pnpm --filter @booth/worker print:test"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

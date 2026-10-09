@@ -208,6 +208,42 @@ describe("failures", () => {
     expect(s.print).toBe("failed");
   });
 
+  it("records a print that comes out after the guest tapped Done", () => {
+    const { state } = start(1);
+    const delivering = [
+      { type: "countdown_elapsed", shot: 1 },
+      { type: "shot_taken", shot: 1 },
+      { type: "accepted" },
+      { type: "composed" },
+    ].reduce((st, ev) => step(st, ev as SessionEvent).state, state);
+
+    // Done before the worker even reached the print job.
+    const done = step(delivering, { type: "finished" }).state;
+    const printing = step(done, { type: "print_started" }).state;
+    expect(printing).toMatchObject({ phase: "done", print: "printing" });
+    expect(step(printing, { type: "printed" }).state).toMatchObject({ phase: "done", print: "printed" });
+
+    // The QR screen timing out is the same.
+    const timedOut = step(step(delivering, { type: "print_started" }).state, { type: "timed_out", phase: "delivering", shot: 1 }).state;
+    expect(step(timedOut, { type: "print_failed", reason: "jam" }).state).toMatchObject({ phase: "done", print: "failed" });
+  });
+
+  it("settles a print once: a late or repeated outcome is stale", () => {
+    const { state } = start(1);
+    const printed = [
+      { type: "countdown_elapsed", shot: 1 },
+      { type: "shot_taken", shot: 1 },
+      { type: "accepted" },
+      { type: "composed" },
+      { type: "print_started" },
+      { type: "printed" },
+    ].reduce((st, ev) => step(st, ev as SessionEvent).state, state);
+    expect(transition(printed, { type: "print_failed", reason: "x" }, T0)).toMatchObject({ ok: true, stale: true });
+    expect(transition(printed, { type: "print_started" }, T0)).toMatchObject({ ok: true, stale: true });
+    // Before the photos are put together there is no print to report on.
+    expect(transition(start(1).state, { type: "printed" }, T0)).toMatchObject({ ok: true, stale: true });
+  });
+
   it("a compose failure fails the session", () => {
     const { state } = start(1);
     const s = [

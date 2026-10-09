@@ -10,7 +10,7 @@ export async function readBooth(db: Db | Tx): Promise<BoothRow> {
 }
 
 export type BoothPatch = Partial<
-  Pick<BoothRow, "eventName" | "paused" | "cameraMode" | "countdownSeconds" | "paperLeft" | "paperPackSize" | "lockedTemplateId" | "filters">
+  Pick<BoothRow, "eventName" | "paused" | "cameraMode" | "countdownSeconds" | "paperLeft" | "paperTraySize" | "inkLeft" | "inkCassetteSize" | "lockedTemplateId" | "filters">
 >;
 
 export async function updateBooth(patch: BoothPatch): Promise<BoothRow> {
@@ -26,14 +26,21 @@ export async function updateBooth(patch: BoothPatch): Promise<BoothRow> {
   });
 }
 
-/** One sheet went through the printer. Never goes below zero. */
-export async function consumePaper(db: Db | Tx): Promise<number> {
-  const [row] = await db
-    .update(booth)
-    .set({ paperLeft: sql`greatest(${booth.paperLeft} - 1, 0)`, updatedAt: new Date() })
-    .where(eq(booth.id, 1))
-    .returning({ paperLeft: booth.paperLeft });
-  return row?.paperLeft ?? 0;
+/** One postcard came out: a sheet from the tray and a print's worth of ink. Neither goes below zero. */
+export async function consumePrint(db: Db | Tx): Promise<{ paperLeft: number; inkLeft: number }> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(booth)
+      .set({
+        paperLeft: sql`greatest(${booth.paperLeft} - 1, 0)`,
+        inkLeft: sql`greatest(${booth.inkLeft} - 1, 0)`,
+        updatedAt: new Date(),
+      })
+      .where(eq(booth.id, 1))
+      .returning({ paperLeft: booth.paperLeft, inkLeft: booth.inkLeft });
+    await notify(tx);
+    return row ?? { paperLeft: 0, inkLeft: 0 };
+  });
 }
 
 /**

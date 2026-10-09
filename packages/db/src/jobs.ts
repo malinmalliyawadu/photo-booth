@@ -1,7 +1,7 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import type { Effect } from "@booth/core";
 import type { Db, Tx } from "./client";
-import { jobs, type JobRow } from "./schema";
+import { jobs, type JobKind, type JobRow } from "./schema";
 
 /**
  * How many goes an upload gets. The backoff doubles from a second, so
@@ -48,11 +48,11 @@ export async function enqueueJob(
 }
 
 /**
- * Claims the next due job for this worker, or null. The subquery with
- * SKIP LOCKED means two workers never take the same row and a worker
- * never waits on another's lock.
+ * Claims the next due job of one of these kinds for this worker, or
+ * null. The subquery with SKIP LOCKED means two workers never take the
+ * same row and a worker never waits on another's lock.
  */
-export async function claimJob(db: Db, workerId: string): Promise<JobRow | null> {
+export async function claimJob(db: Db, workerId: string, kinds: readonly JobKind[]): Promise<JobRow | null> {
   const rows = await db.execute<JobRow>(sql`
     update jobs set
       status = 'running',
@@ -62,6 +62,7 @@ export async function claimJob(db: Db, workerId: string): Promise<JobRow | null>
     where id = (
       select id from jobs
       where status = 'queued' and run_at <= now()
+        and kind in (${sql.join(kinds.map((k) => sql`${k}`), sql`, `)})
       order by run_at, id
       for update skip locked
       limit 1

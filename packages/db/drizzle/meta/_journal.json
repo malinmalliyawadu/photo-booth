@@ -29,6 +29,27 @@
       "when": 1791430557654,
       "tag": "0003_mirror_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791535201567,
+      "tag": "0004_supplies",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791535204878,
+      "tag": "0005_split_paper_and_ink",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791535213582,
+      "tag": "0006_drop_paper_pack_size",
+      "breakpoints": true
     }
   ]
 }
