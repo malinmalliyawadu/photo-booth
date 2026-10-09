@@ -19,11 +19,11 @@ Vitest for pure modules, Playwright for the kiosk's happy path.
 | Path | What it is | Runs on |
 | --- | --- | --- |
 | `apps/booth` | Next.js: kiosk (`/`), admin (`/admin`), slideshow (`/slideshow`), the session API, the SSE stream, `/media` | The controller, or Coolify |
-| `packages/worker` | Node process: camera, compositor, print queue, the gallery sync, the jobs loop | The controller, or Coolify |
-| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants, the filter catalogue and its pixel arithmetic, the compositor's geometry, the `Camera` interface, the iPad capture plan and viewfinder crop, the gallery setting and sync plan | The app and the worker |
+| `packages/worker` | Node process: camera, compositor, the CUPS printer, the gallery sync, the jobs lanes | The controller, or Coolify |
+| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants and the paper and ink counts, the IPP codec and what the printer's states mean, the filter catalogue and its pixel arithmetic, the compositor's geometry, the `Camera` interface, the iPad capture plan and viewfinder crop, the gallery setting and sync plan | The app and the worker |
 | `packages/db` | Drizzle schema + migrations, the repositories, the data directory, the snapshot | The app and the worker |
 | `templates/` | Layout PNGs and optional JSON sidecars; the seed loads them | Uploaded through admin on the night |
-| `ops/` | `ca.sh` (local certificate authority), `Caddyfile`; systemd units and the soak test arrive in phase 6 | The controller |
+| `ops/` | `ca.sh` (local certificate authority), `Caddyfile`, `printer.sh` (the SELPHY's CUPS queue); systemd units and the soak test arrive in phase 6 | The controller |
 | `e2e/` | Playwright, against the real app, worker and Postgres | |
 
 Workspace packages are consumed as TypeScript source (`exports` point at
@@ -47,6 +47,7 @@ finished session there and the QR links there; see **The gallery**.
 - `pnpm typecheck`, `pnpm lint` - every package
 - `pnpm e2e` - Playwright; starts the app and worker if they are not running
 - `pnpm db:generate` - a migration from a schema change (never push/sync)
+- `sudo ops/printer.sh` - the SELPHY's CUPS queue, once per controller; `pnpm print:test` prints the calibration card
 
 ## Hard rules
 
@@ -71,6 +72,11 @@ review ─(filter_chosen | mirror_chosen)─▶ review
                                             └─(compose_failed | timed_out)─▶ failed
 any active phase ─(cancelled)─▶ abandoned
 ```
+
+`print` runs alongside from `composed`: `print_started`, then `printed`,
+`print_failed` or `print_skipped`. Those are accepted in any phase while
+the print is pending, because a card takes most of a minute and the
+guest may have tapped Done long before it is out.
 
 The review comes before the compositor because the review is where the
 guest picks the look and the mirror; the JPEGs are made once, from what
@@ -147,10 +153,13 @@ on the right screen.
 fans out to every stream; notifications are coalesced for 25 ms and a
 10 s timer re-reads regardless.
 
-The worker (`packages/worker/src/main.ts`) is one loop over the `jobs`
-table: `FOR UPDATE SKIP LOCKED` claims the next due row, the handler
-runs, the row is marked done or re-queued with backoff. LISTEN wakes it;
-a 250 ms poll catches due countdowns. It reports `worker`, `camera`,
+The worker (`packages/worker/src/main.ts`) runs lanes over the `jobs`
+table: each claims the next due row of its kinds with `FOR UPDATE SKIP
+LOCKED`, the handler runs, the row is marked done or re-queued with
+backoff. The session's steps share one lane; `print` and `sync` have
+their own, so a minute-long print or a slow upload never delays the
+next guest's countdown. LISTEN wakes them all; a 250 ms poll catches
+due countdowns. It reports `worker`, `camera`,
 `printer` and `sync` health every 5 s into `components`, serves
 `/health` on 3101, and will serve the MJPEG preview there in phase 3.
 
@@ -250,7 +259,7 @@ of a session with photos but no JPEGs composes it on demand.
   of a fixed label under it, so changing the password signs everyone
   out and the browser stores nothing reusable.
 - **Phase 1 fakes**: `FakeCamera` cycles sample photos, `FakePrinter`
-  waits 1.5 s and the paper counter still comes down.
+  waits 1.5 s and the paper and ink counts still come down.
 - **Ports**: Postgres 5436, booth 3100, worker 3101, chosen to stay
   clear of the other projects on this machine.
 - **The gallery is the event's site, not an app here.** There was an
@@ -291,6 +300,26 @@ of a session with photos but no JPEGs composes it on demand.
   the locked one, and kept with its overlay so those sessions still
   draw. The seed records every file it loads in `seeded_templates`, so
   a deleted or renamed seed layout does not come back on the next start.
+- **The printer is CUPS over IPP, not `lp`.** `ops/printer.sh` makes a
+  queue for the SELPHY CP1300 through Gutenprint's own USB backend
+  (CUPS's generic `usb://` cannot drive it), on postcard paper, with
+  `printer-error-policy=abort-job`: a failed print fails that one job
+  instead of stopping the queue behind it. `CupsPrinter` sends the JPEG
+  with Print-Job and follows the job until it is completed, aborted or
+  past `PRINT_TIMEOUT_MS`; `packages/core/src/ipp.ts` is the codec and
+  `printer.ts` what the states mean. A job that cannot start while the
+  printer reports something only a person can fix fails after
+  `BLOCKED_GRACE_MS`, so one empty tray does not hold every guest
+  behind it for the full timeout. CUPS cannot see a pulled cable until
+  a job runs, so the admin card also looks for the printer in sysfs.
+  USB rather than the CP1300's AirPrint, which is Wi-Fi only, on
+  purpose: no Wi-Fi to drop, and the driver reports paper and ink.
+- **Paper and ink are counted separately.** The CP1300's tray holds 18
+  postcards and a cassette lasts 36 prints, so `paperLeft` and `inkLeft`
+  come down together and are refilled apart. At zero the print is
+  skipped (`printBlocker`), and when the printer itself says the tray
+  or the cassette is empty, that count goes to zero, so the guests
+  after it are skipped with "needs a refill" rather than each failing.
 - **Reprint** is a plain `print` job with `reprint: true`; it does not
   touch the session's phase. **Send again** (`/api/admin/sessions/{id}/sync`)
   is a plain `sync` job the same way.
@@ -319,11 +348,11 @@ of a session with photos but no JPEGs composes it on demand.
 
 1. **The whole interface, nothing hooked up** - done: this repo.
 2. **Compositor** - done: print, web and thumbnail JPEGs for any slot count, composed on `accepted` (see **The compositor**). Text fields from the sidecar are not drawn yet.
-3. **Real camera** - `GPhoto2Camera`, MJPEG liveview, the stop-shoot-restart cycle, USB reconnect.
-4. **Printing** - CUPS (driverless IPP first, Gutenprint second), the queue, the paper counter.
+3. **Real camera** - not needed for the wedding, which shoots with the iPad camera; kept for a party that brings a DSLR: `GPhoto2Camera`, MJPEG liveview, the stop-shoot-restart cycle, USB reconnect.
+4. **Printing** - built, not yet run on the printer: the SELPHY CP1300 over USB through CUPS and Gutenprint, the paper and ink counts (see **The printer is CUPS over IPP**). Left for the hardware: run `ops/printer.sh` and `pnpm print:test` on the controller, set `SAFE_MARGIN_MM` from the card, and confirm the printer's out-of-paper and jam reports reach the admin card.
 5. **Gallery and QR** - done, ahead of order, as the push to the event's site (see **The gallery**) and the wedding-planner's `/api/booth/photos` and `/i/booth/{id}`.
 6. **Hardening** - systemd, a watchdog, recovery after a power cut, the 4-hour soak test.
 7. **Polish** - sounds, retake (modelled already, not on the review screen yet), final artwork, whatever the hallway tests turn up.
 
-Phases 3 and 4 are the gated ones and need the hardware in the room by
+Phase 4 is the gated one (and 3, for a DSLR) and needs the hardware in the room by
 the end of October 2026. The full dress rehearsal is in February 2027.

@@ -12,7 +12,7 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
-import { FILTER_IDS, type CameraMode, type FilterId, type Phase, type PrintStatus, type Slot, type TextField } from "@booth/core";
+import { FILTER_IDS, INK_CASSETTE_PRINTS, PAPER_TRAY_SHEETS, type CameraMode, type FilterId, type Phase, type PrintStatus, type Slot, type TextField } from "@booth/core";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
@@ -28,8 +28,12 @@ export const booth = pgTable(
     paused: boolean("paused").notNull().default(false),
     cameraMode: text("camera_mode").$type<CameraMode>().notNull().default("fake"),
     countdownSeconds: integer("countdown_seconds").notNull().default(5),
-    paperLeft: integer("paper_left").notNull().default(36),
-    paperPackSize: integer("paper_pack_size").notNull().default(36),
+    /** Postcards in the printer's paper tray, counted down by each print. */
+    paperLeft: integer("paper_left").notNull().default(PAPER_TRAY_SHEETS),
+    paperTraySize: integer("paper_tray_size").notNull().default(PAPER_TRAY_SHEETS),
+    /** Prints left on the ink cassette. */
+    inkLeft: integer("ink_left").notNull().default(INK_CASSETTE_PRINTS),
+    inkCassetteSize: integer("ink_cassette_size").notNull().default(INK_CASSETTE_PRINTS),
     /** When set, the picker is skipped and every session uses this layout. */
     lockedTemplateId: text("locked_template_id"),
     /** Which filters the kiosk offers; one means the step is skipped. */

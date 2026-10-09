@@ -36,6 +36,6 @@ export async function resetBooth(request: APIRequestContext): Promise<void> {
   const s = await snapshot(request);
   if (s.session) await request.post(`/api/sessions/${s.session.id}/cancel`);
   await request.patch("/api/admin/booth", {
-    data: { paused: false, cameraMode: "fake", countdownSeconds: 1, lockedTemplateId: null, paperLeft: 36, filters: [...ALL_FILTERS] },
+    data: { paused: false, cameraMode: "fake", countdownSeconds: 1, lockedTemplateId: null, paperLeft: 18, inkLeft: 36, filters: [...ALL_FILTERS] },
   });
 }

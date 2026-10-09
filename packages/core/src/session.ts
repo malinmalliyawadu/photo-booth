@@ -214,15 +214,18 @@ export function transition(state: SessionState, event: SessionEvent, now: Date):
       return ok({ ...state, mirrored: event.mirrored }, []);
     }
 
+    // A print takes most of a minute and the guest may tap Done long
+    // before it is out, so the print's progress is recorded whatever the
+    // phase: it follows `print`, not the screen.
     case "print_started": {
-      if (state.phase !== "delivering" || state.print !== "pending") return stale(state);
+      if (state.print !== "pending") return stale(state);
       return ok({ ...state, print: "printing" }, []);
     }
 
     case "printed":
     case "print_failed":
     case "print_skipped": {
-      if (state.phase !== "delivering") return stale(state);
+      if (state.print !== "pending" && state.print !== "printing") return stale(state);
       const print = event.type === "printed" ? "printed" : event.type === "print_failed" ? "failed" : "skipped";
       return ok({ ...state, print }, []);
     }

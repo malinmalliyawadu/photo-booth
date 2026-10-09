@@ -11,7 +11,9 @@ const Patch = z
     cameraMode: z.enum(["fake", "gphoto2", "ipad"]),
     countdownSeconds: z.number().int().min(1).max(15),
     paperLeft: z.number().int().min(0).max(999),
-    paperPackSize: z.number().int().min(1).max(999),
+    paperTraySize: z.number().int().min(1).max(999),
+    inkLeft: z.number().int().min(0).max(999),
+    inkCassetteSize: z.number().int().min(1).max(999),
     lockedTemplateId: z.string().nullable(),
     // Stored tidy: catalogue order, no duplicates, never empty.
     filters: z.array(z.enum(FILTER_IDS)).min(1, "Offer at least one filter").transform(offeredFilters),
@@ -19,7 +21,7 @@ const Patch = z
   .partial()
   .strict();
 
-/** The attendant's knobs: pause, camera, countdown, paper, locked layout, filters, event name. */
+/** The attendant's knobs: pause, camera, countdown, paper and ink, locked layout, filters, event name. */
 export async function PATCH(request: Request) {
   try {
     const parsed = Patch.safeParse(await readJson(request));

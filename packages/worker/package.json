@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
     "start": "tsx --env-file-if-exists=../../.env src/main.ts",
+    "print:test": "tsx --env-file-if-exists=../../.env src/print-test.ts",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint src"
   },

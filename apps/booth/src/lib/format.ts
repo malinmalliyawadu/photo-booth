@@ -30,7 +30,7 @@ export const PRINT_LABEL: Record<PrintStatus, string> = {
   printing: "Printing",
   printed: "Printed",
   failed: "Print failed",
-  skipped: "No paper",
+  skipped: "Not printed: refill",
 };
 
 export function sessionNumber(n: number): string {

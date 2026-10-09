@@ -1,7 +1,7 @@
-import { planSync, type Camera, type CameraMode, type Phase } from "@booth/core";
+import { planSync, printBlocker, type Camera, type CameraMode, type Phase } from "@booth/core";
 import {
   applySessionEvent,
-  consumePaper,
+  consumePrint,
   countPrint,
   db,
   ensureDir,
@@ -11,12 +11,13 @@ import {
   recordShot,
   resolveData,
   sessionPaths,
+  updateBooth,
   type JobRow,
   type SessionRow,
 } from "@booth/db";
 import { composeSession } from "./compositor";
 import type { Gallery } from "./gallery";
-import type { Printer } from "./printer";
+import { PrintFailure, type Printer } from "./printer";
 
 export interface Services {
   camera: (mode: CameraMode) => Promise<Camera | null>;
@@ -110,6 +111,13 @@ async function composed(session: SessionRow, services: Services): Promise<Sessio
   return { ...session, ...paths };
 }
 
+/**
+ * One postcard. Runs in its own lane (see main.ts), because a print
+ * takes most of a minute and the next guest's countdown must not wait
+ * behind it. An empty tray or a spent cassette, by the counters, skips
+ * the print rather than fail it, so the kiosk says "needs a refill"
+ * rather than "something went wrong".
+ */
 const print: Handler = async (job, services) => {
   const id = sessionOf(job);
   const reprint = job.payload.reprint === true;
@@ -118,20 +126,26 @@ const print: Handler = async (job, services) => {
 
   if (!reprint) await applySessionEvent(id, { type: "print_started" });
   const settings = await readBooth(db);
-  if (settings.paperLeft <= 0) {
-    services.log(`session ${id}: no paper, print skipped`);
-    if (!reprint) await applySessionEvent(id, { type: "print_skipped", reason: "The printer is out of paper" });
+  const blocker = printBlocker(settings);
+  if (blocker) {
+    services.log(`session ${id}: print skipped: ${blocker}`);
+    // A reprint has no session phase to say so; the failed job does, on the admin page.
+    if (reprint) throw new Error(blocker);
+    await applySessionEvent(id, { type: "print_skipped", reason: blocker });
     return;
   }
   try {
     const { compositePath } = await composed(session, services);
-    await services.printer.print(resolveData(compositePath!));
-    await consumePaper(db);
+    await services.printer.print(resolveData(compositePath!), `Booth ${id}`);
+    await consumePrint(db);
     await countPrint(id);
     if (!reprint) await applySessionEvent(id, { type: "printed" });
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     services.log(`session ${id}: print failed: ${reason}`);
+    // The printer knows better than the count: the next guests' prints
+    // are skipped with "needs a refill" until the attendant says it is done.
+    if (err instanceof PrintFailure && err.empty) await updateBooth(err.empty === "paper" ? { paperLeft: 0 } : { inkLeft: 0 });
     if (!reprint) await applySessionEvent(id, { type: "print_failed", reason });
     else throw err;
   }

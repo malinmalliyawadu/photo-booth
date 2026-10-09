@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Camera, Lock, Minus, Pause, Play, Plus, Printer, RefreshCw, Trash2, Upload } from "lucide-react";
-import { FILTERS, cssFilter, filterById, type CameraMode, type FilterId } from "@booth/core";
+import { Camera, Droplet, Layers, Lock, Minus, Pause, Play, Plus, Printer, Trash2, Upload } from "lucide-react";
+import { FILTERS, INK_LOW, PAPER_LOW, cssFilter, filterById, type CameraMode, type FilterId } from "@booth/core";
 import type { ComponentName, SessionView, Snapshot, TemplateRow, TemplateSummary } from "@booth/db";
 import { Composite, samplePhotos, sessionPhotos } from "@/components/composite";
 import { patch, post, useSnapshot } from "@/components/use-snapshot";
@@ -83,7 +83,7 @@ export function AdminPanel({ initial }: { initial: Snapshot }) {
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              className={`btn ${booth.paused ? "btn-primary" : ""}`}
+              className={`btn col-span-2 ${booth.paused ? "btn-primary" : ""}`}
               onClick={() => setBooth({ paused: !booth.paused }, "Pause")}
               data-testid="pause"
             >
@@ -93,10 +93,18 @@ export function AdminPanel({ initial }: { initial: Snapshot }) {
             <button
               type="button"
               className="btn"
-              onClick={() => setBooth({ paperLeft: booth.paperPackSize }, "Paper")}
-              data-testid="new-pack"
+              onClick={() => setBooth({ paperLeft: booth.paperTraySize }, "Paper")}
+              data-testid="refill-paper"
             >
-              <RefreshCw className="h-4 w-4" /> New paper pack
+              <Layers className="h-4 w-4" /> Tray refilled
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setBooth({ inkLeft: booth.inkCassetteSize }, "Ink")}
+              data-testid="new-ink"
+            >
+              <Droplet className="h-4 w-4" /> Ink replaced
             </button>
           </div>
 
@@ -122,17 +130,31 @@ export function AdminPanel({ initial }: { initial: Snapshot }) {
             />
           </Row>
 
-          <Row label="Paper left">
-            <div className="flex items-center gap-2">
+          <Row label="Paper in tray">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <Stepper
                 value={booth.paperLeft}
                 min={0}
-                max={999}
+                max={booth.paperTraySize}
+                suffix={`/${booth.paperTraySize}`}
                 onChange={(paperLeft) => setBooth({ paperLeft }, "Paper")}
                 testId="paper"
               />
-              <span className="mono text-sm text-cream-faint">of {booth.paperPackSize}</span>
-              {booth.paperLeft <= 10 && <span className="pill pill-warn">Low</span>}
+              <SupplyPill left={booth.paperLeft} low={PAPER_LOW} />
+            </div>
+          </Row>
+
+          <Row label="Ink prints">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <Stepper
+                value={booth.inkLeft}
+                min={0}
+                max={booth.inkCassetteSize}
+                suffix={`/${booth.inkCassetteSize}`}
+                onChange={(inkLeft) => setBooth({ inkLeft }, "Ink")}
+                testId="ink"
+              />
+              <SupplyPill left={booth.inkLeft} low={INK_LOW} />
             </div>
           </Row>
 
@@ -247,6 +269,13 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+/** Nothing when there is plenty; the booth skips prints at zero, so that is an error. */
+function SupplyPill({ left, low }: { left: number; low: number }) {
+  if (left <= 0) return <span className="pill pill-error">Empty</span>;
+  if (left <= low) return <span className="pill pill-warn">Low</span>;
+  return null;
+}
+
 function ComponentCard({
   name,
   value,
@@ -345,7 +374,7 @@ function Stepper({
   testId?: string;
 }) {
   return (
-    <div className="inline-flex items-center rounded-xl bg-night ring-1 ring-night-edge">
+    <div className="inline-flex items-center justify-self-start rounded-xl bg-night ring-1 ring-night-edge">
       <button type="button" className="px-3 py-2" aria-label="Less" onClick={() => onChange(Math.max(min, value - 1))}>
         <Minus className="h-4 w-4" />
       </button>
