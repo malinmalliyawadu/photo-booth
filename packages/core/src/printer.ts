@@ -2,9 +2,10 @@
  * What the printer is up to, in words the attendant can act on.
  *
  * The worker asks CUPS for the queue's state and each job's state over
- * IPP, and looks for the SELPHY on the USB bus; this module turns those
- * answers into the printer card on the admin page and into a job's
- * outcome. It never talks to CUPS itself.
+ * IPP, and looks for the SELPHY itself: on the USB bus, or over Wi-Fi
+ * when it prints by AirPrint. This module turns those answers into the
+ * printer card on the admin page and into a job's outcome. It never
+ * talks to CUPS or the printer itself.
  */
 
 /** printer-state (RFC 8011 5.4.11). */
@@ -35,10 +36,45 @@ export interface QueueReport {
   reasons: string[];
   message: string;
   accepting: boolean;
+  /** Where CUPS sends the queue's jobs, which says where to look for the printer. */
+  deviceUri?: string | undefined;
 }
 
-/** Whether the SELPHY is on the USB bus: unknown where the bus cannot be read (macOS, a container). */
-export type UsbPresence = "present" | "absent" | "unknown";
+/**
+ * How the worker can look for the printer itself, from the queue's
+ * device URI: on the USB bus for the SELPHY through Gutenprint
+ * (gutenprint53+usb://canon-cp1300/...), or by asking the printer over
+ * the network for AirPrint (ipp://Canon-SELPHY-CP1300.local:631/ipp/print),
+ * at `url` over plain HTTP, naming itself as `printerUri`. A dnssd://
+ * or ipps:// queue cannot be asked: the first needs a DNS-SD lookup
+ * and the second the printer's self-signed certificate.
+ */
+export type PrinterLink = { via: "usb" } | { via: "network"; url: string; printerUri: string } | { via: "unknown" };
+
+export function printerLink(deviceUri: string | undefined): PrinterLink {
+  let uri: URL;
+  try {
+    uri = new URL(deviceUri ?? "");
+  } catch {
+    return { via: "unknown" };
+  }
+  const scheme = uri.protocol.slice(0, -1).toLowerCase();
+  if (scheme === "usb" || scheme.endsWith("+usb")) return { via: "usb" };
+  if (scheme !== "ipp" || !uri.hostname) return { via: "unknown" };
+  const host = uri.port ? uri.host : `${uri.hostname}:631`;
+  return { via: "network", url: `http://${host}${uri.pathname}`, printerUri: `ipp://${host}${uri.pathname}` };
+}
+
+/** Whether the printer itself was found: unknown where it cannot be looked for (no sysfs on macOS, a dnssd:// queue). */
+export type Presence = "present" | "absent" | "unknown";
+
+/** What the worker found when it looked for the printer itself. */
+export interface Sighting {
+  via: PrinterLink["via"];
+  presence: Presence;
+  /** printer-state-reasons from the printer itself, when it was asked over the network. */
+  reasons: string[];
+}
 
 export interface PrinterHealth {
   status: "ok" | "warn" | "error";
@@ -138,10 +174,16 @@ export function queueBlocked(queue: QueueReport): ReasonWords | null {
 /**
  * The admin card for the printer. CUPS knows the queue but not the
  * paper: until a job runs, an unplugged printer looks like an idle
- * queue, so the USB bus is asked as well.
+ * queue, so the printer itself is looked for as well. Over the network
+ * it answers for itself, and what it says counts with the queue's word.
  */
-export function printerHealth(queue: QueueReport, usb: UsbPresence, queueName: string): PrinterHealth {
-  if (usb === "absent") return { status: "error", detail: "Not on USB: check the cable and that the printer is switched on" };
+export function printerHealth(cups: QueueReport, seen: Sighting, queueName: string): PrinterHealth {
+  if (seen.presence === "absent") {
+    return seen.via === "network"
+      ? { status: "error", detail: "Not answering on Wi-Fi: check that the printer is switched on and on the booth's Wi-Fi" }
+      : { status: "error", detail: "Not on USB: check the cable and that the printer is switched on" };
+  }
+  const queue = { ...cups, reasons: [...new Set([...cups.reasons, ...seen.reasons])] };
   if (queue.reasons.includes("paused") || queue.state === PRINTER_STATE.stopped) {
     const why = describeReasons(queue.reasons.filter((r) => r !== "paused"));
     return {
@@ -152,7 +194,7 @@ export function printerHealth(queue: QueueReport, usb: UsbPresence, queueName: s
   if (!queue.accepting) return { status: "error", detail: `The queue is refusing jobs: run cupsaccept ${queueName}` };
   const why = describeReasons(queue.reasons);
   if (why) return { status: why.status, detail: why.detail };
-  const where = usb === "present" ? "on USB" : "queue ready";
+  const where = seen.presence === "present" ? (seen.via === "network" ? "on Wi-Fi" : "on USB") : "queue ready";
   return { status: "ok", detail: queue.state === PRINTER_STATE.processing ? `Printing (${where})` : `Ready (${where})` };
 }
 

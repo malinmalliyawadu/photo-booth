@@ -26,7 +26,7 @@ export const booth = pgTable(
     id: integer("id").primaryKey().default(1),
     eventName: text("event_name").notNull().default("Photo booth"),
     paused: boolean("paused").notNull().default(false),
-    cameraMode: text("camera_mode").$type<CameraMode>().notNull().default("fake"),
+    cameraMode: text("camera_mode").$type<CameraMode>().notNull().default("ipad"),
     countdownSeconds: integer("countdown_seconds").notNull().default(5),
     /** Whether the kiosk plays its ticks, shutter and chime; a quiet room may want it off. */
     sounds: boolean("sounds").notNull().default(true),

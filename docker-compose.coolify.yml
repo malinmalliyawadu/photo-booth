@@ -16,8 +16,8 @@
 #   SERVICE_PASSWORD_POSTGRES=booth ADMIN_PASSWORD=secret docker compose \
 #     -f docker-compose.coolify.yml -f ops/compose.local.yml -p booth-cloud up --build
 #
-# There is no USB here: set the camera to "iPad" on /admin, and the
-# printer stays fake until printing has somewhere to run.
+# There is no USB here: the camera is the iPad's (the default), and
+# the printer stays fake until printing has somewhere to run.
 
 services:
   db:

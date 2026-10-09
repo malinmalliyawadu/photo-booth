@@ -1,6 +1,6 @@
 {
-  "id": "f4c21bb2-4f0f-4648-9fc6-46cf65a14fa8",
-  "prevId": "9259540e-4992-4f66-b982-3ef7059f7106",
+  "id": "e56e5bdf-120f-43f1-8bc0-34509913efb6",
+  "prevId": "f4c21bb2-4f0f-4648-9fc6-46cf65a14fa8",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -42,6 +42,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": 5
+        },
+        "sounds": {
+          "name": "sounds",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
         },
         "paper_left": {
           "name": "paper_left",

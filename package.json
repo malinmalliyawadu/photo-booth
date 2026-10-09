@@ -9,6 +9,7 @@
     "dev": "concurrently -n booth,worker -c blue,magenta \"pnpm --filter @booth/booth dev\" \"pnpm --filter @booth/worker dev\"",
     "dev:http": "concurrently -n booth,worker -c blue,magenta \"pnpm --filter @booth/booth dev:http\" \"pnpm --filter @booth/worker dev\"",
     "build": "pnpm -r build",
+    "start": "concurrently -n booth,worker -c blue,magenta \"pnpm --filter @booth/booth start\" \"pnpm --filter @booth/worker start\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "pnpm -r typecheck",

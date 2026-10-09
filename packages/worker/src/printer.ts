@@ -1,15 +1,18 @@
 /**
  * The printer: CUPS on the controller, driving the SELPHY over USB
- * through Gutenprint (`ops/printer.sh` sets the queue up), or a fake.
+ * through Gutenprint on Linux or by AirPrint over Wi-Fi on a Mac
+ * (`ops/printer.sh` sets the queue up either way), or a fake.
  *
  * The worker speaks IPP to CUPS directly rather than through `lp` and
  * `lpstat`: one request queues the postcard and returns its job ID, and
  * the job's own state says when the card is in the tray or why it is
  * not, with no text output to parse. CUPS cannot see the paper or a
  * pulled cable until a job runs, so the status also looks for the
- * printer on the USB bus.
+ * printer itself: on the USB bus, or by asking it over the network.
  */
 import { readFile, readdir } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { userInfo } from "node:os";
 import { join } from "node:path";
 import {
@@ -28,16 +31,19 @@ import {
   isSuccess,
   jobOutcome,
   printerHealth,
+  printerLink,
   queueBlocked,
   stuckReason,
   type IppAttribute,
   type IppResponse,
   type JobReport,
+  type Presence,
   type PrinterHealth,
+  type PrinterLink,
   type QueueReport,
+  type Sighting,
   type Supply,
   type UsbDevice,
-  type UsbPresence,
 } from "@booth/core";
 
 export interface Printer {
@@ -81,8 +87,14 @@ export interface CupsOptions {
   url: string;
   /** The queue's name, for the fixes the admin page suggests. */
   queue: string;
+  /**
+   * CUPS's local socket, to reach it through instead of its port. On a
+   * Mac, launchd starts CUPS when something connects to the socket, and
+   * CUPS listens on its port only while it runs, which is not always.
+   */
+  socketPath?: string | undefined;
   /** Whether the printer is on the USB bus; Linux's sysfs by default. */
-  usb?: () => Promise<UsbPresence>;
+  usb?: () => Promise<Presence>;
   pollMs?: number;
   timeoutMs?: number;
   blockedGraceMs?: number;
@@ -90,9 +102,14 @@ export interface CupsOptions {
 
 /** One IPP request to CUPS, which answers at once: it is local. */
 const REQUEST_TIMEOUT_MS = 10_000;
+/** Asking an AirPrint printer how it is, every few seconds: one that takes longer is not really there. */
+const PROBE_TIMEOUT_MS = 3_000;
 
-const PRINTER_ATTRIBUTES = ["printer-state", "printer-state-reasons", "printer-state-message", "printer-is-accepting-jobs"];
+const PRINTER_ATTRIBUTES = ["printer-state", "printer-state-reasons", "printer-state-message", "printer-is-accepting-jobs", "device-uri"];
 const JOB_ATTRIBUTES = ["job-state", "job-state-reasons", "job-state-message"];
+
+/** The macOS CUPS socket that launchd starts CUPS on. */
+const MAC_CUPS_SOCKET = "/private/var/run/cupsd";
 
 export class CupsPrinter implements Printer {
   readonly kind = "cups" as const;
@@ -175,7 +192,30 @@ export class CupsPrinter implements Printer {
     } catch (err) {
       return { status: "error", detail: err instanceof Error ? err.message : String(err) };
     }
-    return printerHealth(queue, await (this.opts.usb ?? usbPresence)(), this.opts.queue);
+    return printerHealth(queue, await this.lookFor(printerLink(queue.deviceUri)), this.opts.queue);
+  }
+
+  /** The printer itself: on the USB bus, or answering on the network, where it also says how it is. */
+  private async lookFor(link: PrinterLink): Promise<Sighting> {
+    if (link.via === "usb") return { via: "usb", presence: await (this.opts.usb ?? usbPresence)(), reasons: [] };
+    if (link.via === "unknown") return { via: "unknown", presence: "unknown", reasons: [] };
+    const body = this.encode(link.printerUri, OPERATION.getPrinterAttributes, [
+      { tag: VALUE.keyword, name: "requested-attributes", values: ["printer-state-reasons"] },
+    ]);
+    let res: HttpResult;
+    try {
+      res = await post(link.url, body, PROBE_TIMEOUT_MS);
+    } catch {
+      return { via: "network", presence: "absent", reasons: [] };
+    }
+    // It answered, so it is there, whatever it made of the question.
+    let reasons: string[] = [];
+    try {
+      if (res.status === 200) reasons = strings(groupOf(decodeResponse(res.body), GROUP.printer).get("printer-state-reasons"));
+    } catch {
+      // Not IPP after all: the printer is there, and says nothing of itself.
+    }
+    return { via: "network", presence: "present", reasons };
   }
 
   private async queue(): Promise<QueueReport> {
@@ -185,11 +225,13 @@ export class CupsPrinter implements Printer {
     if (res.status === STATUS_NOT_FOUND) throw new Error(`CUPS has no queue named ${this.opts.queue}: run ops/printer.sh`);
     if (!isSuccess(res.status)) throw new Error(`CUPS: ${describeStatus(res)}`);
     const a = groupOf(res, GROUP.printer);
+    const deviceUri = a.get("device-uri")?.[0];
     return {
       state: Number(a.get("printer-state")?.[0] ?? 0),
-      reasons: (a.get("printer-state-reasons") ?? []).filter((r): r is string => typeof r === "string"),
+      reasons: strings(a.get("printer-state-reasons")),
       message: String(a.get("printer-state-message")?.[0] ?? "").trim(),
       accepting: a.get("printer-is-accepting-jobs")?.[0] !== false,
+      deviceUri: typeof deviceUri === "string" ? deviceUri : undefined,
     };
   }
 
@@ -202,7 +244,7 @@ export class CupsPrinter implements Printer {
     const a = groupOf(res, GROUP.job);
     return {
       state: Number(a.get("job-state")?.[0] ?? 0),
-      reasons: (a.get("job-state-reasons") ?? []).filter((r): r is string => typeof r === "string"),
+      reasons: strings(a.get("job-state-reasons")),
       message: String(a.get("job-state-message")?.[0] ?? "").trim(),
     };
   }
@@ -213,7 +255,21 @@ export class CupsPrinter implements Printer {
     jobAttributes: IppAttribute[] = [],
     document?: Uint8Array,
   ): Promise<IppResponse> {
-    const header = encodeRequest({
+    const header = this.encode(this.printerUri, operation, attributes, jobAttributes);
+    const body = document ? Buffer.concat([header, document]) : header;
+    let res: HttpResult;
+    try {
+      res = await post(this.endpoint, body, REQUEST_TIMEOUT_MS, this.opts.socketPath);
+    } catch (err) {
+      const where = this.opts.socketPath ?? new URL(this.endpoint).host;
+      throw new Error(`CUPS is not answering at ${where} (${networkError(err)}): is it installed and running?`);
+    }
+    if (res.status !== 200) throw new Error(`CUPS answered HTTP ${res.status}`);
+    return decodeResponse(res.body);
+  }
+
+  private encode(printerUri: string, operation: number, attributes: IppAttribute[], jobAttributes: IppAttribute[] = []): Uint8Array {
+    return encodeRequest({
       operation,
       requestId: ++this.requestId,
       groups: [
@@ -222,7 +278,7 @@ export class CupsPrinter implements Printer {
           attributes: [
             { tag: VALUE.charset, name: "attributes-charset", values: ["utf-8"] },
             { tag: VALUE.naturalLanguage, name: "attributes-natural-language", values: ["en"] },
-            { tag: VALUE.uri, name: "printer-uri", values: [this.printerUri] },
+            { tag: VALUE.uri, name: "printer-uri", values: [printerUri] },
             { tag: VALUE.name, name: "requesting-user-name", values: [this.user] },
             ...attributes,
           ],
@@ -230,30 +286,52 @@ export class CupsPrinter implements Printer {
         ...(jobAttributes.length ? [{ tag: GROUP.job, attributes: jobAttributes }] : []),
       ],
     });
-    const body = document ? Buffer.concat([header, document]) : header;
-    let res: Response;
-    try {
-      res = await fetch(this.endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/ipp" },
-        body,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-    } catch (err) {
-      throw new Error(`CUPS is not answering at ${new URL(this.endpoint).host} (${networkError(err)}): is it installed and running?`);
-    }
-    if (!res.ok) throw new Error(`CUPS answered HTTP ${res.status}`);
-    return decodeResponse(new Uint8Array(await res.arrayBuffer()));
   }
 }
 
-/** The useful part of a failed fetch: undici puts the socket's error code under `cause`. */
+interface HttpResult {
+  status: number;
+  body: Uint8Array;
+}
+
+/**
+ * One IPP request over HTTP, through a local socket when given one.
+ * node:http rather than fetch, which cannot use a socket.
+ */
+function post(url: string, body: Uint8Array, timeoutMs: number, socketPath?: string): Promise<HttpResult> {
+  const target = new URL(url);
+  const send = target.protocol === "https:" ? httpsRequest : httpRequest;
+  return new Promise((resolve, reject) => {
+    const req = send(
+      target,
+      {
+        method: "POST",
+        socketPath,
+        headers: { "Content-Type": "application/ipp", "Content-Length": body.byteLength },
+        signal: AbortSignal.timeout(timeoutMs),
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, body: new Uint8Array(Buffer.concat(chunks)) }));
+        res.on("error", reject);
+      },
+    );
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
+/** The useful part of a failed request: the socket's error code, or that it took too long. */
 function networkError(err: unknown): string {
   if (!(err instanceof Error)) return String(err);
-  const cause = err.cause as { code?: unknown; message?: unknown } | undefined;
-  if (typeof cause?.code === "string") return cause.code;
-  if (typeof cause?.message === "string" && cause.message) return cause.message;
-  return err.name === "TimeoutError" ? "timed out" : err.message;
+  if (err.name === "AbortError" || err.name === "TimeoutError") return "timed out";
+  const code = (err as NodeJS.ErrnoException).code;
+  return typeof code === "string" ? code : err.message;
+}
+
+function strings(values: unknown[] | undefined): string[] {
+  return (values ?? []).filter((v): v is string => typeof v === "string");
 }
 
 /**
@@ -261,7 +339,7 @@ function networkError(err: unknown): string {
  * off or unplugged, it is gone from there. Unknown where there is no
  * sysfs to read, which leaves the queue's word as the only one.
  */
-export async function usbPresence(root = "/sys/bus/usb/devices"): Promise<UsbPresence> {
+export async function usbPresence(root = "/sys/bus/usb/devices"): Promise<Presence> {
   let entries: string[];
   try {
     entries = await readdir(root);
@@ -286,7 +364,11 @@ export function printerFor(env: NodeJS.ProcessEnv): Printer {
     case "cups": {
       const queue = env.BOOTH_PRINTER_QUEUE || "SELPHY";
       const server = env.BOOTH_CUPS_URL || "http://localhost:631";
-      return new CupsPrinter({ url: new URL(`/printers/${encodeURIComponent(queue)}`, server).toString(), queue });
+      return new CupsPrinter({
+        url: new URL(`/printers/${encodeURIComponent(queue)}`, server).toString(),
+        queue,
+        socketPath: !env.BOOTH_CUPS_URL && process.platform === "darwin" ? MAC_CUPS_SOCKET : undefined,
+      });
     }
     default:
       throw new Error(`Unknown BOOTH_PRINTER "${kind}": fake or cups`);
