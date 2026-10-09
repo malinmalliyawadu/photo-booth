@@ -23,7 +23,7 @@ Vitest for pure modules, Playwright for the kiosk's happy path.
 | `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants and the paper and ink counts, the IPP codec and what the printer's states mean, the filter catalogue and its pixel arithmetic, the compositor's geometry, the `Camera` interface, the iPad capture plan and viewfinder crop, the gallery setting and sync plan | The app and the worker |
 | `packages/db` | Drizzle schema + migrations, the repositories, the data directory, the snapshot | The app and the worker |
 | `templates/` | Layout PNGs and optional JSON sidecars; the seed loads them | Uploaded through admin on the night |
-| `ops/` | `ca.sh` (local certificate authority), `Caddyfile`, `printer.sh` (the SELPHY's CUPS queue: USB on Linux, AirPrint on a Mac); systemd units and the soak test arrive in phase 6 | The controller |
+| `ops/` | `tailscale.sh` (the booth's HTTPS address on the tailnet), `printer.sh` (the SELPHY's CUPS queue: USB on Linux, AirPrint on a Mac), `ca.sh` (the private certificate authority for `pnpm dev`); systemd units and the soak test arrive in phase 6 | The controller |
 | `e2e/` | Playwright, against the real app, worker and Postgres | |
 
 Workspace packages are consumed as TypeScript source (`exports` point at
@@ -42,6 +42,7 @@ finished session there and the QR links there; see **The gallery**.
 - `pnpm db:migrate`, `pnpm db:seed` - the seed is idempotent and the worker runs it on start
 - `pnpm assets` - regenerates the placeholder templates and sample photos (sharp)
 - `pnpm icons` - rasterises `apps/booth/src/app/icon.svg` into the home-screen PNGs; commit them
+- `pnpm build`, then `pnpm start` - the booth for real: the built app and the worker on 127.0.0.1, which `tailscale serve` puts on the tailnet over HTTPS (`ops/tailscale.sh`, once per controller)
 - `pnpm dev` - booth app over **HTTPS on 3100** plus the worker; `pnpm --filter @booth/booth dev:http` for a browser that will not trust the private CA
 - `pnpm test` - Vitest, every pure module
 - `pnpm typecheck`, `pnpm lint` - every package
@@ -250,16 +251,29 @@ of a session with photos but no JPEGs composes it on demand.
 
 ## Decisions made
 
-- **HTTPS is Caddy's job in production and Next's in dev.** `next start`
-  cannot terminate TLS, so `ops/Caddyfile` fronts the app (3100) and the
-  worker's preview (3101) on one origin with the certificate from
-  `ops/ca.sh`. `pnpm dev` runs `next dev --experimental-https` with the
-  same files. The iPad installs `ops/certs/ca.crt` once.
+- **HTTPS is Tailscale's job at the venue and Next's in dev.** Safari
+  gives the camera only to a secure context. `pnpm start` runs the built
+  app and the worker on 127.0.0.1, and `tailscale serve` (set up once by
+  `ops/tailscale.sh`) answers at `https://<machine>.<tailnet>.ts.net`
+  with a certificate Safari already trusts and proxies to the app; Go's
+  proxy passes Server-Sent Events straight through. The iPad joins the
+  tailnet and installs nothing, the controller keeps its own name (the
+  tailnet name is set apart with `tailscale set --hostname`), and on one
+  Wi-Fi the two connect directly, so a session never goes out to the
+  internet; where the Wi-Fi keeps devices apart, Tailscale relays. This
+  replaced Caddy with a private CA at `booth.local`, which needed the
+  CA installed and trusted on every iPad and a Bonjour name the
+  controller had to advertise. `pnpm dev` still serves HTTPS with
+  `ops/ca.sh`'s certificate. The phase 3 preview (3101) joins the same
+  address as a `tailscale serve --set-path /preview`.
 - **The admin password** is one secret in `.env`; the cookie is an HMAC
   of a fixed label under it, so changing the password signs everyone
   out and the browser stores nothing reusable.
 - **Phase 1 fakes**: `FakeCamera` cycles sample photos, `FakePrinter`
-  waits 1.5 s and the paper and ink counts still come down.
+  waits 1.5 s and the paper and ink counts still come down. The camera
+  mode is the booth row's, switched on `/admin`; it defaults to the
+  iPad, which is what the booth shoots with (migration 0007 moved
+  existing booths off the fake one).
 - **Ports**: Postgres 5436, booth 3100, worker 3101, chosen to stay
   clear of the other projects on this machine.
 - **The gallery is the event's site, not an app here.** There was an

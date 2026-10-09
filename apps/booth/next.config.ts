@@ -12,7 +12,10 @@ try {
 }
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // The Docker image runs the traced standalone server (its Dockerfile
+  // sets NEXT_OUTPUT); `pnpm start` on a controller runs `next start`,
+  // which cannot serve a standalone build.
+  ...(process.env.NEXT_OUTPUT === "standalone" ? { output: "standalone" as const } : {}),
   // Workspace packages ship TypeScript source, not a build.
   transpilePackages: ["@booth/core", "@booth/db"],
   // sharp and pg carry native bindings; leave them resolving from
