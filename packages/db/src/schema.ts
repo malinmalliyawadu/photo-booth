@@ -26,7 +26,7 @@ export const booth = pgTable(
     id: integer("id").primaryKey().default(1),
     eventName: text("event_name").notNull().default("Photo booth"),
     paused: boolean("paused").notNull().default(false),
-    cameraMode: text("camera_mode").$type<CameraMode>().notNull().default("fake"),
+    cameraMode: text("camera_mode").$type<CameraMode>().notNull().default("ipad"),
     countdownSeconds: integer("countdown_seconds").notNull().default(5),
     /** Postcards in the printer's paper tray, counted down by each print. */
     paperLeft: integer("paper_left").notNull().default(PAPER_TRAY_SHEETS),

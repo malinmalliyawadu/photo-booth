@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { JOB_STATE, PRINTER_STATE, describeReasons, findSelphy, jobOutcome, printerHealth, queueBlocked, stuckReason, type QueueReport } from "./printer";
+import {
+  JOB_STATE,
+  PRINTER_STATE,
+  describeReasons,
+  findSelphy,
+  jobOutcome,
+  printerHealth,
+  printerLink,
+  queueBlocked,
+  stuckReason,
+  type Presence,
+  type QueueReport,
+} from "./printer";
 
 const queue = (over: Partial<QueueReport> = {}): QueueReport => ({
   state: PRINTER_STATE.idle,
@@ -9,44 +21,82 @@ const queue = (over: Partial<QueueReport> = {}): QueueReport => ({
   ...over,
 });
 
+const usb = (presence: Presence) => ({ via: "usb" as const, presence, reasons: [] });
+const wifi = (presence: Presence, reasons: string[] = []) => ({ via: "network" as const, presence, reasons });
+
 describe("printerHealth", () => {
   it("is ready when the queue is idle and the printer is on USB", () => {
-    expect(printerHealth(queue(), "present", "SELPHY")).toEqual({ status: "ok", detail: "Ready (on USB)" });
-    expect(printerHealth(queue({ state: PRINTER_STATE.processing }), "present", "SELPHY")).toEqual({ status: "ok", detail: "Printing (on USB)" });
-    expect(printerHealth(queue(), "unknown", "SELPHY")).toEqual({ status: "ok", detail: "Ready (queue ready)" });
+    expect(printerHealth(queue(), usb("present"), "SELPHY")).toEqual({ status: "ok", detail: "Ready (on USB)" });
+    expect(printerHealth(queue({ state: PRINTER_STATE.processing }), usb("present"), "SELPHY")).toEqual({ status: "ok", detail: "Printing (on USB)" });
+    expect(printerHealth(queue(), usb("unknown"), "SELPHY")).toEqual({ status: "ok", detail: "Ready (queue ready)" });
   });
 
   it("says unplugged before anything CUPS thinks, since CUPS cannot tell", () => {
-    expect(printerHealth(queue(), "absent", "SELPHY")).toMatchObject({ status: "error", detail: expect.stringMatching(/Not on USB/) });
+    expect(printerHealth(queue(), usb("absent"), "SELPHY")).toMatchObject({ status: "error", detail: expect.stringMatching(/Not on USB/) });
   });
 
   it("names the fix for a stopped or refusing queue", () => {
-    expect(printerHealth(queue({ state: PRINTER_STATE.stopped, reasons: ["paused"] }), "present", "SELPHY")).toEqual({
+    expect(printerHealth(queue({ state: PRINTER_STATE.stopped, reasons: ["paused"] }), usb("present"), "SELPHY")).toEqual({
       status: "error",
       detail: "The queue is stopped: run cupsenable SELPHY",
     });
     expect(
-      printerHealth(queue({ state: PRINTER_STATE.stopped, reasons: ["paused", "media-empty-error"] }), "present", "SELPHY").detail,
+      printerHealth(queue({ state: PRINTER_STATE.stopped, reasons: ["paused", "media-empty-error"] }), usb("present"), "SELPHY").detail,
     ).toBe("Out of paper: refill the paper tray. The queue is stopped: run cupsenable SELPHY");
-    expect(printerHealth(queue({ state: PRINTER_STATE.stopped, message: "Printer error 0x12" }), "present", "SELPHY").detail).toBe(
+    expect(printerHealth(queue({ state: PRINTER_STATE.stopped, message: "Printer error 0x12" }), usb("present"), "SELPHY").detail).toBe(
       "Printer error 0x12. The queue is stopped: run cupsenable SELPHY",
     );
-    expect(printerHealth(queue({ accepting: false }), "present", "SELPHY").detail).toBe("The queue is refusing jobs: run cupsaccept SELPHY");
+    expect(printerHealth(queue({ accepting: false }), usb("present"), "SELPHY").detail).toBe("The queue is refusing jobs: run cupsaccept SELPHY");
   });
 
   it("turns state reasons into the attendant's words, errors before warnings", () => {
-    expect(printerHealth(queue({ reasons: ["media-low-warning"] }), "present", "SELPHY")).toEqual({ status: "warn", detail: "Paper is running low" });
-    expect(printerHealth(queue({ reasons: ["media-low-warning", "marker-supply-empty-error"] }), "present", "SELPHY")).toEqual({
+    expect(printerHealth(queue({ reasons: ["media-low-warning"] }), usb("present"), "SELPHY")).toEqual({ status: "warn", detail: "Paper is running low" });
+    expect(printerHealth(queue({ reasons: ["media-low-warning", "marker-supply-empty-error"] }), usb("present"), "SELPHY")).toEqual({
       status: "error",
       detail: "The ink cassette is used up: put in a new one",
     });
     // No suffix is an error by the spec.
-    expect(printerHealth(queue({ reasons: ["media-jam"] }), "present", "SELPHY").status).toBe("error");
-    expect(printerHealth(queue({ reasons: ["toner-low-error"] }), "present", "SELPHY").detail).toBe("The printer reports toner-low");
+    expect(printerHealth(queue({ reasons: ["media-jam"] }), usb("present"), "SELPHY").status).toBe("error");
+    expect(printerHealth(queue({ reasons: ["toner-low-error"] }), usb("present"), "SELPHY").detail).toBe("The printer reports toner-low");
   });
 
   it("ignores reports and CUPS's own progress notes", () => {
-    expect(printerHealth(queue({ reasons: ["cups-waiting-for-job-completed", "other-report"] }), "present", "SELPHY").status).toBe("ok");
+    expect(printerHealth(queue({ reasons: ["cups-waiting-for-job-completed", "other-report"] }), usb("present"), "SELPHY").status).toBe("ok");
+  });
+
+  it("looks for an AirPrint printer on the Wi-Fi, and takes its word with the queue's", () => {
+    expect(printerHealth(queue(), wifi("present", ["none"]), "SELPHY")).toEqual({ status: "ok", detail: "Ready (on Wi-Fi)" });
+    expect(printerHealth(queue(), wifi("absent"), "SELPHY")).toEqual({
+      status: "error",
+      detail: "Not answering on Wi-Fi: check that the printer is switched on and on the booth's Wi-Fi",
+    });
+    // Idle, CUPS knows nothing of the paper; the printer does.
+    expect(printerHealth(queue(), wifi("present", ["media-empty-error"]), "SELPHY")).toMatchObject({ status: "error", detail: "Out of paper: refill the paper tray" });
+    expect(printerHealth(queue({ reasons: ["media-low-warning"] }), wifi("present", ["media-low-warning"]), "SELPHY").detail).toBe("Paper is running low");
+  });
+});
+
+describe("printerLink", () => {
+  it("looks on the USB bus for a USB queue", () => {
+    expect(printerLink("gutenprint53+usb://canon-cp1300/C1234")).toEqual({ via: "usb" });
+    expect(printerLink("usb://Canon/SELPHY%20CP1300?serial=1")).toEqual({ via: "usb" });
+  });
+
+  it("asks an AirPrint printer over plain HTTP, on IPP's port unless the URI names one", () => {
+    expect(printerLink("ipp://Canon-SELPHY-CP1300.local:631/ipp/print")).toEqual({
+      via: "network",
+      url: "http://Canon-SELPHY-CP1300.local:631/ipp/print",
+      printerUri: "ipp://Canon-SELPHY-CP1300.local:631/ipp/print",
+    });
+    expect(printerLink("ipp://192.168.8.20/ipp/print")).toMatchObject({ url: "http://192.168.8.20:631/ipp/print" });
+    expect(printerLink("ipp://[fe80::1]:8631/ipp/print")).toMatchObject({ url: "http://[fe80::1]:8631/ipp/print" });
+  });
+
+  it("cannot look for a printer it would need DNS-SD or a certificate to reach", () => {
+    expect(printerLink("dnssd://Canon%20SELPHY%20CP1300._ipp._tcp.local./?uuid=1")).toEqual({ via: "unknown" });
+    expect(printerLink("ipps://Canon-SELPHY-CP1300.local:443/ipp/print")).toEqual({ via: "unknown" });
+    expect(printerLink(undefined)).toEqual({ via: "unknown" });
+    expect(printerLink("not a uri")).toEqual({ via: "unknown" });
   });
 });
 

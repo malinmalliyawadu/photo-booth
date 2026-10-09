@@ -6,7 +6,7 @@
     "dev": "pnpm --silent certs && next dev -p \"${PORT:-3100}\" --experimental-https --experimental-https-key ../../ops/certs/booth.key --experimental-https-cert ../../ops/certs/booth.crt --experimental-https-ca ../../ops/certs/ca.crt",
     "certs": "test -f ../../ops/certs/booth.crt || ../../ops/ca.sh",
     "build": "next build",
-    "start": "next start -p 3100",
+    "start": "next start -H 127.0.0.1 -p 3100",
     "typecheck": "next typegen && tsc -p tsconfig.json",
     "lint": "eslint",
     "dev:http": "next dev -p \"${PORT:-3100}\""

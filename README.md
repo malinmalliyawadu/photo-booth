@@ -1,8 +1,8 @@
 # Photo booth
 
 Tap the iPad, pick a layout and a filter, pose, print, scan. Runs on a
-mini PC at the venue or on Coolify; the photos go to the event's own
-site, where guests' phone photos land too.
+mini PC or a Mac at the venue, or on Coolify; the photos go to the
+event's own site, where guests' phone photos land too.
 
 See `CLAUDE.md` for the architecture, the state machine and the decisions.
 
@@ -24,6 +24,34 @@ the TV is `/slideshow`.
 pnpm test        # unit tests
 pnpm e2e         # Playwright, against the running stack
 ```
+
+## Run it at the venue
+
+The controller (a Mac, or a mini PC) runs the booth, and the iPad
+reaches it through [Tailscale](https://tailscale.com), which gives it an
+HTTPS address with a certificate Safari already trusts. Once:
+
+1. Install Tailscale on the controller and the iPad and sign both in to
+   the same tailnet. In the admin console, under DNS, turn on **HTTPS
+   Certificates**.
+2. On the controller, run `ops/tailscale.sh --name booth`. It names the
+   machine `booth` on the tailnet only (macOS keeps its own name), and
+   prints the booth's address, `https://booth.<tailnet>.ts.net`.
+
+Then, on the night:
+
+```bash
+docker compose up -d          # Postgres
+pnpm install && pnpm build
+pnpm start                    # the app and the worker
+```
+
+The iPad opens the address `ops/tailscale.sh` printed. On the same
+Wi-Fi, Tailscale connects the iPad to the controller directly, so the
+booth does not wait on the venue's internet; where the Wi-Fi keeps
+devices apart, Tailscale relays through the internet instead. Bring
+both up while the venue has internet: Tailscale needs it to sign in
+and to renew the certificate.
 
 ## Layouts
 
@@ -69,8 +97,11 @@ says whether the site is reachable, and every finished session has a
 
 ## The printer
 
-A Canon SELPHY CP1300 on the controller's USB, through CUPS and
-Gutenprint. Once per controller, with the printer plugged in and on:
+A Canon SELPHY CP1300, through CUPS: on a Linux controller over USB
+with Gutenprint, on a Mac by AirPrint over the Wi-Fi (Gutenprint has
+no macOS build, so a Mac cannot drive it over USB). For AirPrint, join
+the printer to the same Wi-Fi as the Mac from its own menu (Wi-Fi
+settings) first. Once per controller, with the printer on:
 
 ```bash
 sudo ops/printer.sh
@@ -93,9 +124,9 @@ cassette. `/admin` counts both down: tap **Tray refilled** after loading
 paper and **New ink cassette** after changing it. At zero the booth
 skips the print and the kiosk says it needs a refill; the guest's
 photos are safe and **Reprint** sends them again. The printer card
-says what the printer reports (out of paper, a jam, unplugged), and a
-print the printer refuses fails within seconds with that reason rather
-than holding up the guests behind it.
+says what the printer reports (out of paper, a jam, unplugged or off
+the Wi-Fi), and a print the printer refuses fails within seconds with
+that reason rather than holding up the guests behind it.
 
 The paper goes back and forth out of the back of the printer four
 times per card (yellow, magenta, cyan, the overcoat), so leave a
@@ -103,13 +134,13 @@ postcard's length clear behind it. A card takes about a minute.
 
 ## Using the iPad's own camera
 
-Set the camera to **iPad** on `/admin`. The kiosk then takes the photos
-with the iPad's front camera; no DSLR needed. Once per iPad:
+The kiosk takes the photos with the iPad's front camera; no DSLR
+needed. That is the default, and `/admin` can switch to the fake camera
+(sample photos) for testing without one. Once per iPad:
 
-1. Install `ops/certs/ca.crt` (open `http://booth.local/ca.crt`), then
-   trust it in Settings › General › About › Certificate Trust Settings.
-   Safari only gives a page the camera over https. Not needed on the
-   Coolify deployment, whose certificate Safari already trusts.
+1. Open the booth at its Tailscale address (see **Run it at the
+   venue**), or the Coolify deployment's. Safari only gives a page the
+   camera over HTTPS, and both have a certificate it already trusts.
 2. Open the kiosk in Safari, then aA › Website Settings › Camera ›
    **Allow**, so Safari never asks mid-countdown.
 3. Turn the brightness up and Auto-Lock off; the white screen is the flash.

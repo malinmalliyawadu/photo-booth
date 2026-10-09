@@ -19,7 +19,7 @@ RUN pnpm install --frozen-lockfile --filter @booth/booth...
 COPY packages/core packages/core
 COPY packages/db packages/db
 COPY apps/booth apps/booth
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1 NEXT_OUTPUT=standalone
 RUN pnpm --filter @booth/booth build
 
 # `output: "standalone"` traces the server and its native modules (sharp,

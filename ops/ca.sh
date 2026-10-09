@@ -1,30 +1,30 @@
 #!/usr/bin/env bash
-# Makes a private certificate authority and issues the controller's
-# certificate from it, so every screen on the booth Wi-Fi talks HTTPS.
-#
-# Safari refuses getUserMedia outside a secure context and the booth is
-# served from a private IP, so this is not optional: the iPad camera
-# fallback exists on the night only if the iPad trusts this CA.
+# Makes a private certificate authority and issues a certificate from
+# it for `pnpm dev`, which serves HTTPS with these files: Safari refuses
+# getUserMedia outside a secure context, so the kiosk's camera needs
+# HTTPS even in development. At the venue the booth is served by
+# `tailscale serve` with Tailscale's certificate instead (ops/tailscale.sh),
+# and the iPad installs nothing.
 #
 # Idempotent: keeps an existing CA, reissues the server certificate
 # only when asked (--reissue) or when it is missing. Needs openssl.
 #
-#   ops/ca.sh                       # localhost + booth.local
-#   BOOTH_HOSTS="booth.local,192.168.8.10" ops/ca.sh --reissue
+#   ops/ca.sh                       # localhost
+#   BOOTH_HOSTS="localhost,192.168.8.10" ops/ca.sh --reissue   # and an iPad testing pnpm dev
 #
 # Output, under ops/certs/ (gitignored):
-#   ca.crt      install this on the iPad (AirDrop it, then Settings >
-#               General > VPN & Device Management > install; then
+#   ca.crt      trust this in a browser or on an iPad that tests pnpm dev
+#               (on an iPad: AirDrop it, install it in Settings, then
 #               Settings > General > About > Certificate Trust Settings
 #               > enable full trust)
-#   ca.key      stays on the controller
+#   ca.key      stays on this machine
 #   booth.crt   the server certificate, with the hosts below as SANs
 #   booth.key   the server key
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 out="$here/certs"
-hosts="${BOOTH_HOSTS:-localhost,booth.local,127.0.0.1}"
+hosts="${BOOTH_HOSTS:-localhost,127.0.0.1}"
 reissue=false
 [[ "${1:-}" == "--reissue" ]] && reissue=true
 
