@@ -41,5 +41,7 @@ http://booth.local, http://localhost {
 		file_server
 		header Content-Type application/x-x509-ca-cert
 	}
-	redir / https://{host}{uri} permanent
+	handle {
+		redir https://{host}{uri} permanent
+	}
 }

@@ -23,7 +23,7 @@ Vitest for pure modules, Playwright for the kiosk's happy path.
 | `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants and the paper and ink counts, the IPP codec and what the printer's states mean, the filter catalogue and its pixel arithmetic, the compositor's geometry, the `Camera` interface, the iPad capture plan and viewfinder crop, the gallery setting and sync plan | The app and the worker |
 | `packages/db` | Drizzle schema + migrations, the repositories, the data directory, the snapshot | The app and the worker |
 | `templates/` | Layout PNGs and optional JSON sidecars; the seed loads them | Uploaded through admin on the night |
-| `ops/` | `ca.sh` (local certificate authority), `Caddyfile`, `printer.sh` (the SELPHY's CUPS queue); systemd units and the soak test arrive in phase 6 | The controller |
+| `ops/` | `ca.sh` (local certificate authority), `Caddyfile`, `printer.sh` (the SELPHY's CUPS queue: USB on Linux, AirPrint on a Mac); systemd units and the soak test arrive in phase 6 | The controller |
 | `e2e/` | Playwright, against the real app, worker and Postgres | |
 
 Workspace packages are consumed as TypeScript source (`exports` point at
@@ -311,9 +311,24 @@ of a session with photos but no JPEGs composes it on demand.
   printer reports something only a person can fix fails after
   `BLOCKED_GRACE_MS`, so one empty tray does not hold every guest
   behind it for the full timeout. CUPS cannot see a pulled cable until
-  a job runs, so the admin card also looks for the printer in sysfs.
+  a job runs, so the admin card also looks for the printer itself,
+  where the queue's device URI says (`printerLink`): in sysfs for USB.
   USB rather than the CP1300's AirPrint, which is Wi-Fi only, on
   purpose: no Wi-Fi to drop, and the driver reports paper and ink.
+- **A Mac controller prints by AirPrint.** Gutenprint has had no macOS
+  build since 2024, and macOS takes no third-party USB backend, so on
+  a Mac `ops/printer.sh` finds the SELPHY on the Wi-Fi (`ippfind`) and
+  makes a driverless queue (`lpadmin -m everywhere`) on the borderless
+  postcard. Its device URI is the printer's own plain-IPP address by
+  `.local` name, so the admin card asks the printer how it is every
+  few seconds: no answer is "not answering on Wi-Fi", and its state
+  reasons count with the queue's, so an empty tray shows before a
+  guest's print finds it. macOS starts CUPS through a local socket
+  (launchd) and listens on 631 only while CUPS runs, so on a Mac the
+  worker reaches CUPS through `/private/var/run/cupsd`. A Mac in
+  Docker was tried and dropped: Docker cannot reach USB there, and
+  reaching the Mac's CUPS from a container took two `cupsd.conf`
+  changes.
 - **Paper and ink are counted separately.** The CP1300's tray holds 18
   postcards and a cassette lasts 36 prints, so `paperLeft` and `inkLeft`
   come down together and are refilled apart. At zero the print is
@@ -349,7 +364,7 @@ of a session with photos but no JPEGs composes it on demand.
 1. **The whole interface, nothing hooked up** - done: this repo.
 2. **Compositor** - done: print, web and thumbnail JPEGs for any slot count, composed on `accepted` (see **The compositor**). Text fields from the sidecar are not drawn yet.
 3. **Real camera** - not needed for the wedding, which shoots with the iPad camera; kept for a party that brings a DSLR: `GPhoto2Camera`, MJPEG liveview, the stop-shoot-restart cycle, USB reconnect.
-4. **Printing** - built, not yet run on the printer: the SELPHY CP1300 over USB through CUPS and Gutenprint, the paper and ink counts (see **The printer is CUPS over IPP**). Left for the hardware: run `ops/printer.sh` and `pnpm print:test` on the controller, set `SAFE_MARGIN_MM` from the card, and confirm the printer's out-of-paper and jam reports reach the admin card.
+4. **Printing** - built, not yet run on the printer: the SELPHY CP1300 over USB through CUPS and Gutenprint, the paper and ink counts (see **The printer is CUPS over IPP**). Left for the hardware: run `ops/printer.sh` and `pnpm print:test` on the controller, set `SAFE_MARGIN_MM` from the card, and confirm the printer's out-of-paper and jam reports reach the admin card; on a Mac, by AirPrint, also that the card comes out borderless and the right way round.
 5. **Gallery and QR** - done, ahead of order, as the push to the event's site (see **The gallery**) and the wedding-planner's `/api/booth/photos` and `/i/booth/{id}`.
 6. **Hardening** - systemd, a watchdog, recovery after a power cut, the 4-hour soak test.
 7. **Polish** - sounds, retake (modelled already, not on the review screen yet), final artwork, whatever the hallway tests turn up.

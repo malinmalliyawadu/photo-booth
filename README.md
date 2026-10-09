@@ -1,8 +1,8 @@
 # Photo booth
 
 Tap the iPad, pick a layout and a filter, pose, print, scan. Runs on a
-mini PC at the venue or on Coolify; the photos go to the event's own
-site, where guests' phone photos land too.
+mini PC or a Mac at the venue, or on Coolify; the photos go to the
+event's own site, where guests' phone photos land too.
 
 See `CLAUDE.md` for the architecture, the state machine and the decisions.
 
@@ -69,8 +69,11 @@ says whether the site is reachable, and every finished session has a
 
 ## The printer
 
-A Canon SELPHY CP1300 on the controller's USB, through CUPS and
-Gutenprint. Once per controller, with the printer plugged in and on:
+A Canon SELPHY CP1300, through CUPS: on a Linux controller over USB
+with Gutenprint, on a Mac by AirPrint over the Wi-Fi (Gutenprint has
+no macOS build, so a Mac cannot drive it over USB). For AirPrint, join
+the printer to the same Wi-Fi as the Mac from its own menu (Wi-Fi
+settings) first. Once per controller, with the printer on:
 
 ```bash
 sudo ops/printer.sh
@@ -93,9 +96,9 @@ cassette. `/admin` counts both down: tap **Tray refilled** after loading
 paper and **New ink cassette** after changing it. At zero the booth
 skips the print and the kiosk says it needs a refill; the guest's
 photos are safe and **Reprint** sends them again. The printer card
-says what the printer reports (out of paper, a jam, unplugged), and a
-print the printer refuses fails within seconds with that reason rather
-than holding up the guests behind it.
+says what the printer reports (out of paper, a jam, unplugged or off
+the Wi-Fi), and a print the printer refuses fails within seconds with
+that reason rather than holding up the guests behind it.
 
 The paper goes back and forth out of the back of the printer four
 times per card (yellow, magenta, cyan, the overcoat), so leave a
