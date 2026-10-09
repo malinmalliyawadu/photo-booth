@@ -16,6 +16,8 @@ try {
  * checkout once `docker compose up -d` has a database.
  */
 const BASE_URL = process.env.BOOTH_URL ?? "https://localhost:3100";
+/** The worker's health endpoint; WORKER_PORT moves it when another stack holds 3101. */
+const WORKER_URL = process.env.WORKER_URL ?? "http://localhost:3101/health";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -38,7 +40,7 @@ export default defineConfig({
   webServer: [
     {
       command: "pnpm --filter @booth/worker start",
-      url: "http://localhost:3101/health",
+      url: WORKER_URL,
       reuseExistingServer: true,
       timeout: 60_000,
     },
