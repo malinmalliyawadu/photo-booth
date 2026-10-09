@@ -15,6 +15,7 @@ import {
   PickerScreen,
   ReviewScreen,
 } from "./screens";
+import { useSounds } from "./sounds";
 import { useIpadCamera } from "./use-ipad-camera";
 
 /**
@@ -35,6 +36,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   // Open for as long as the booth is in iPad mode, not just while a
   // guest is posing: see useIpadCamera.
   const camera = useIpadCamera(booth.cameraMode === "ipad");
+  const sounds = useSounds(booth.sounds);
 
   // Remember which session this screen is on. When it leaves the active
   // phases as a failure, explain before the attract loop comes back.
@@ -89,7 +91,9 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
     switch (session.phase) {
       case "countdown":
       case "capturing":
-        screen = <LiveScreen session={session} template={template} cameraMode={booth.cameraMode} camera={camera} onCancel={() => command(url("cancel"))} />;
+        screen = (
+          <LiveScreen session={session} template={template} cameraMode={booth.cameraMode} camera={camera} sounds={sounds} onCancel={() => command(url("cancel"))} />
+        );
         break;
       case "composing":
         screen = <ComposingScreen />;
@@ -100,6 +104,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
             session={session}
             template={template}
             filters={booth.filters}
+            sounds={sounds}
             busy={busy}
             onFilter={(filter: FilterId) => command(url("filter"), { filter })}
             onMirror={(mirrored: boolean) => command(url("mirror"), { mirrored })}
@@ -110,7 +115,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
         );
         break;
       case "delivering":
-        screen = <DeliverScreen session={session} template={template} busy={busy} onDone={() => command(url("finish"))} />;
+        screen = <DeliverScreen session={session} template={template} sounds={sounds} busy={busy} onDone={() => command(url("finish"))} />;
         break;
       default:
         screen = <ComposingScreen />;
@@ -118,7 +123,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   }
 
   return (
-    <main className="kiosk bg-night text-cream">
+    <main className="kiosk bg-velvet text-ivory">
       <ConnectionBanner connected={connected} />
       {screen}
     </main>

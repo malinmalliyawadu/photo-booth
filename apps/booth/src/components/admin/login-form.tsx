@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Aperture, Frame, Grain, Spotlight } from "@/components/chrome";
 import { post } from "@/components/use-snapshot";
 
 export function LoginForm({ configured }: { configured: boolean }) {
@@ -26,20 +27,26 @@ export function LoginForm({ configured }: { configured: boolean }) {
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-night p-6 text-cream">
-      <form onSubmit={submit} className="card w-full max-w-sm space-y-5 p-6">
-        <div>
-          <p className="eyebrow">Attendant</p>
-          <h1 className="display mt-1 text-3xl">Booth admin</h1>
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-velvet p-6 text-ivory">
+      <Spotlight />
+      <Grain />
+      <Frame inset="inset-4" />
+      <form onSubmit={submit} className="card card-gold relative w-full max-w-sm space-y-6 p-7 animate-rise">
+        <div className="flex items-center gap-4">
+          <Aperture className="h-10 w-10 text-gold" />
+          <div>
+            <p className="eyebrow">Attendant</p>
+            <h1 className="display mt-1 text-3xl">Booth admin</h1>
+          </div>
         </div>
         {!configured ? (
-          <p className="rounded-xl bg-gold-tint px-4 py-3 text-sm text-gold">
+          <p className="rounded-xl bg-amber-tint px-4 py-3 text-sm text-amber">
             ADMIN_PASSWORD is not set on the controller, so nobody can sign in. Set it in .env and restart the booth.
           </p>
         ) : (
           <>
             <label className="block space-y-2">
-              <span className="text-sm font-semibold text-cream-soft">Password</span>
+              <span className="text-sm font-semibold text-ivory-soft">Password</span>
               <input
                 type="password"
                 className="field"
@@ -50,8 +57,12 @@ export function LoginForm({ configured }: { configured: boolean }) {
                 data-testid="password"
               />
             </label>
-            {error && <p className="text-sm text-rose" role="alert">{error}</p>}
-            <button type="submit" className="btn btn-primary w-full" disabled={busy || password.length === 0}>
+            {error && (
+              <p className="text-sm text-claret" role="alert">
+                {error}
+              </p>
+            )}
+            <button type="submit" className="btn btn-primary w-full min-h-12" disabled={busy || password.length === 0}>
               Sign in
             </button>
           </>

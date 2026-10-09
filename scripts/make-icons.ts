@@ -16,7 +16,7 @@ const SOURCE = path.join(APP, "icon.svg");
 async function png(size: number, file: string) {
   await sharp(SOURCE, { density: (72 * size) / 512 })
     .resize(size, size)
-    .flatten({ background: "#0f1113" })
+    .flatten({ background: "#0d0a0f" })
     .png({ compressionLevel: 9 })
     .toFile(file);
   console.log("wrote", path.relative(ROOT, file));

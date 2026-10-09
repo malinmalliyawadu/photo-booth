@@ -18,7 +18,7 @@ Vitest for pure modules, Playwright for the kiosk's happy path.
 
 | Path | What it is | Runs on |
 | --- | --- | --- |
-| `apps/booth` | Next.js: kiosk (`/`), admin (`/admin`), slideshow (`/slideshow`), the session API, the SSE stream, `/media` | The controller, or Coolify |
+| `apps/booth` | Next.js: kiosk (`/`), admin (`/admin`, `/admin/sessions`, `/admin/setup`), slideshow (`/slideshow`), the session API, the SSE stream, `/media` | The controller, or Coolify |
 | `packages/worker` | Node process: camera, compositor, the CUPS printer, the gallery sync, the jobs lanes | The controller, or Coolify |
 | `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants and the paper and ink counts, the IPP codec and what the printer's states mean, the filter catalogue and its pixel arithmetic, the compositor's geometry, the `Camera` interface, the iPad capture plan and viewfinder crop, the gallery setting and sync plan | The app and the worker |
 | `packages/db` | Drizzle schema + migrations, the repositories, the data directory, the snapshot | The app and the worker |
@@ -248,6 +248,28 @@ and the last attempt sends `compose_failed`, so the kiosk says so
 rather than waiting out the 60 s timeout. A reprint or a "send again"
 of a session with photos but no JPEGs composes it on demand.
 
+## The look (`apps/booth/src/app/globals.css`)
+
+The gilded darkroom: velvet black with an aubergine cast, ivory type,
+and champagne gold as the one accent, for a dim venue where the screen
+is the brightest thing in the room. Bodoni Moda carries every big word
+(the event name, the countdown numeral, the titles), Instrument Sans
+the controls, Geist Mono the IDs and counts; all three are variable
+font files in `apps/booth/src/assets/fonts`, so the build fetches
+nothing. The tokens are the `@theme` block, the shared pieces are
+classes there (`.tap`, `.btn`, `.card`, `.pill`, `.mat`, `.corner`) and
+`components/chrome.tsx` (the grain, the lamp, the invitation frame,
+the film corners, the aperture mark). `Composite` takes `mat` to show a
+print on its ivory mat, which is how every print appears: in the
+picker, on the review, on the QR screen, on the TV and in the attract
+loop's wall. One theme, no light mode.
+
+The kiosk's three sounds (a tick per countdown second, the shutter, a
+chime when the photos are in and again when the print is out) are
+synthesised with the Web Audio API in `kiosk/sounds.ts`, not fetched;
+iPadOS needs a gesture before audio plays, so the first tap unlocks
+the context. `booth.sounds` switches them off from Setup.
+
 ## Decisions made
 
 - **HTTPS is Caddy's job in production and Next's in dev.** `next start`
@@ -255,6 +277,13 @@ of a session with photos but no JPEGs composes it on demand.
   worker's preview (3101) on one origin with the certificate from
   `ops/ca.sh`. `pnpm dev` runs `next dev --experimental-https` with the
   same files. The iPad installs `ops/certs/ca.crt` once.
+- **Admin is three tabs on three routes**: Live (`/admin`: the verdict,
+  the components, the guest in the booth, the supplies, pause),
+  Sessions (reprint, send again, delete) and Setup (event, camera,
+  countdown, sounds, the looks and the layouts). The route group's
+  layout reads the snapshot once and `AdminShell` shares it with every
+  tab over the stream, so switching tabs does not reconnect. The tab
+  bar sits at the thumb on a phone and becomes a rail on anything wider.
 - **The admin password** is one secret in `.env`; the cookie is an HMAC
   of a fixed label under it, so changing the password signs everyone
   out and the browser stores nothing reusable.
@@ -352,7 +381,7 @@ of a session with photos but no JPEGs composes it on demand.
 4. **Printing** - built, not yet run on the printer: the SELPHY CP1300 over USB through CUPS and Gutenprint, the paper and ink counts (see **The printer is CUPS over IPP**). Left for the hardware: run `ops/printer.sh` and `pnpm print:test` on the controller, set `SAFE_MARGIN_MM` from the card, and confirm the printer's out-of-paper and jam reports reach the admin card.
 5. **Gallery and QR** - done, ahead of order, as the push to the event's site (see **The gallery**) and the wedding-planner's `/api/booth/photos` and `/i/booth/{id}`.
 6. **Hardening** - systemd, a watchdog, recovery after a power cut, the 4-hour soak test.
-7. **Polish** - sounds, retake (modelled already, not on the review screen yet), final artwork, whatever the hallway tests turn up.
+7. **Polish** - in progress: the gilded-darkroom redesign of the kiosk, the admin page and the TV (see **The look**), the sounds and the retake button are done; left: final artwork, whatever the hallway tests turn up.
 
 Phase 4 is the gated one (and 3, for a DSLR) and needs the hardware in the room by
 the end of October 2026. The full dress rehearsal is in February 2027.

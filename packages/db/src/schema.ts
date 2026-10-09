@@ -28,6 +28,8 @@ export const booth = pgTable(
     paused: boolean("paused").notNull().default(false),
     cameraMode: text("camera_mode").$type<CameraMode>().notNull().default("fake"),
     countdownSeconds: integer("countdown_seconds").notNull().default(5),
+    /** Whether the kiosk plays its ticks, shutter and chime; a quiet room may want it off. */
+    sounds: boolean("sounds").notNull().default(true),
     /** Postcards in the printer's paper tray, counted down by each print. */
     paperLeft: integer("paper_left").notNull().default(PAPER_TRAY_SHEETS),
     paperTraySize: integer("paper_tray_size").notNull().default(PAPER_TRAY_SHEETS),

@@ -1,20 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <!--
-    The booth's icon: the one warm lamp in a dark room, drawn as a lens.
-    Source of every icon size; `pnpm icons` rasterises it. Everything
-    sits inside the maskable safe zone (a centred circle of radius 205),
-    so Android may crop it to any shape.
+    The booth's icon: a brass aperture under one warm lamp. Source of
+    every icon size; `pnpm icons` rasterises it. Everything sits inside
+    the maskable safe zone (a centred circle of radius 205), so Android
+    may crop it to any shape.
   -->
   <defs>
-    <radialGradient id="glow">
-      <stop offset="0" stop-color="#e8743b" stop-opacity="0.4"/>
-      <stop offset="1" stop-color="#e8743b" stop-opacity="0"/>
+    <radialGradient id="lamp" cx="0.5" cy="0.2" r="0.8">
+      <stop offset="0" stop-color="#d9b56a" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#d9b56a" stop-opacity="0"/>
     </radialGradient>
+    <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0d79a"/>
+      <stop offset="0.55" stop-color="#d9b56a"/>
+      <stop offset="1" stop-color="#b08d44"/>
+    </linearGradient>
   </defs>
-  <rect width="512" height="512" fill="#0f1113"/>
-  <circle cx="256" cy="256" r="240" fill="url(#glow)"/>
-  <circle cx="256" cy="256" r="150" fill="#e8743b"/>
-  <circle cx="256" cy="256" r="94" fill="#0f1113"/>
-  <circle cx="256" cy="256" r="58" fill="#22262c"/>
-  <circle cx="228" cy="228" r="17" fill="#f3ede2"/>
+  <rect width="512" height="512" fill="#0d0a0f"/>
+  <rect width="512" height="512" fill="url(#lamp)"/>
+  <g fill="none" stroke="url(#brass)" stroke-width="17" stroke-linecap="round">
+    <circle cx="256" cy="256" r="136"/>
+    <line x1="286" y1="204" x2="360.7" y2="333.2"/>
+    <line x1="226" y1="204" x2="375.2" y2="204"/>
+    <line x1="196" y1="256" x2="270.6" y2="126.8"/>
+    <line x1="226" y1="308" x2="151.4" y2="178.8"/>
+    <line x1="286" y1="308" x2="136.8" y2="308"/>
+    <line x1="316" y1="256" x2="241.4" y2="385.2"/>
+  </g>
 </svg>

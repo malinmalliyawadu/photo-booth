@@ -5,6 +5,9 @@ import type { TemplateSummary } from "@booth/db";
 /** How a photo is flipped: the same transform the live preview uses, so the two agree. */
 export const MIRROR_TRANSFORM = "scaleX(-1)";
 
+/** The ivory mat's width around a print, as a fraction of the print's width. */
+const MAT = 0.025;
+
 /**
  * A layout with photos in its slots. Until a session is composed the
  * browser draws it: the photos sit under the knocked-out template
@@ -24,6 +27,7 @@ export function Composite({
   mirrored = false,
   className = "",
   fit = false,
+  mat = false,
 }: {
   template: Pick<TemplateSummary, "width" | "height" | "slots" | "screenUrl" | "name">;
   /** Shot number to image URL. Missing shots render as an empty slot. */
@@ -42,24 +46,35 @@ export function Composite({
    * thumbnail in a column.
    */
   fit?: boolean;
+  /** Show it as a print: on an ivory mat with a deep shadow. */
+  mat?: boolean;
 }) {
   const { width, height } = template;
   const ratio = width / height;
   const look = cssFilter(filter);
   const transform = mirrored ? MIRROR_TRANSFORM : undefined;
-  const box = (
-    <div
-      className={`relative overflow-hidden bg-night-lifted ${className}`}
-      style={{
-        aspectRatio: `${width} / ${height}`,
-        ...(fit ? { width: `min(100%, calc(100cqh * ${ratio}))` } : {}),
-      }}
-    >
+  const pad = mat ? MAT : 0;
+  // The mat's padding is a share of the width on every side, so the
+  // matted box is a little squarer than the print inside it.
+  const outer = (ratio * (1 + 2 * pad)) / (1 + 2 * pad * ratio);
+  const print = (
+    <div className="relative h-full w-full overflow-hidden bg-velvet-lifted" style={{ aspectRatio: `${width} / ${height}` }}>
       {composed ? (
         <img src={composed} alt={template.name} className="absolute inset-0 h-full w-full" draggable={false} data-testid="composed" />
       ) : (
         <BrowserDrawn template={template} photos={photos} look={look} transform={transform} />
       )}
+    </div>
+  );
+  const box = (
+    <div
+      className={`${mat ? "mat" : "overflow-hidden"} ${className}`}
+      style={{
+        ...(fit ? { aspectRatio: `${outer}`, width: `min(100%, calc(100cqh * ${outer}))` } : {}),
+        ...(mat ? { padding: `${pad * 100}%` } : {}),
+      }}
+    >
+      {print}
     </div>
   );
   if (!fit) return box;
@@ -85,7 +100,7 @@ function BrowserDrawn({
         return (
           <div
             key={i}
-            className="absolute overflow-hidden bg-night-edge"
+            className="absolute overflow-hidden bg-velvet-edge"
             style={{
               left: `${(slot.x / width) * 100}%`,
               top: `${(slot.y / height) * 100}%`,
@@ -97,7 +112,7 @@ function BrowserDrawn({
               <img src={url} alt="" className="h-full w-full object-cover" style={{ filter: look, transform }} draggable={false} />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
-                <span className="mono text-cream-faint text-[1.2em]">{slot.shot}</span>
+                <span className="display text-[1.4em] text-ivory-faint">{slot.shot}</span>
               </div>
             )}
           </div>

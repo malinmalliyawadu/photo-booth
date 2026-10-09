@@ -14,7 +14,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/sessions/[i
     type: "svg",
     errorCorrectionLevel: "M",
     margin: 1,
-    color: { dark: "#0f1113", light: "#f3ede2" },
+    color: { dark: "#0d0a0f", light: "#f7f1e6" },
   });
   return new Response(svg, {
     headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400, immutable" },
