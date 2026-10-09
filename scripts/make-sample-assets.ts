@@ -25,15 +25,77 @@ function slotRects(rects: Rect[]): string {
   return rects.map((r) => `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${MAGENTA}"/>`).join("");
 }
 
-function frame(width: number, height: number, inner: string, caption: string, sub: string): string {
-  const captionY = height - 70;
+// The gold inner frame line sits this far in from the edge; nothing drawn crosses it.
+const INNER = 40;
+// The space under the photos for the caption: from the lowest slot to the
+// inner frame line, or on the frameless strip to as far from the bottom
+// edge as the photos start from the top.
+const CAPTION_BAND = 160;
+// The least room the caption keeps from the photos above it, the line
+// below it and the sides of its band.
+const CAPTION_CLEARANCE = 28;
+
+type Band = { top: number; bottom: number; left: number; right: number };
+
+type CaptionStyle = { size: number; subSize: number; subGap: number; tracking: number };
+const CAPTION: CaptionStyle = { size: 54, subSize: 24, subGap: 48, tracking: 6 };
+const STRIP_CAPTION: CaptionStyle = { size: 40, subSize: 18, subGap: 40, tracking: 5 };
+
+function captionText(cx: number, baseline: number, caption: string, sub: string, style: CaptionStyle): string {
+  return `<text x="${cx}" y="${baseline}" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="${style.size}" fill="#1d2621">${caption}</text>
+    <text x="${cx}" y="${baseline + style.subGap}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${style.subSize}" letter-spacing="${style.tracking}" fill="#7a5d24">${sub}</text>`;
+}
+
+/** The rows and columns the drawn text actually covers, whatever fonts this machine substituted. */
+async function inkBounds(width: number, height: number, fragment: string): Promise<Band> {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${fragment}</svg>`;
+  const { data, info } = await sharp(Buffer.from(svg)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const ink: Band = { top: info.height, bottom: -1, left: info.width, right: -1 };
+  for (let y = 0; y < info.height; y++) {
+    for (let x = 0; x < info.width; x++) {
+      if (data[(y * info.width + x) * info.channels + 3] === 0) continue;
+      ink.top = Math.min(ink.top, y);
+      ink.bottom = Math.max(ink.bottom, y + 1);
+      ink.left = Math.min(ink.left, x);
+      ink.right = Math.max(ink.right, x + 1);
+    }
+  }
+  if (ink.bottom < 0) throw new Error("The caption drew nothing: no font for it on this machine?");
+  return ink;
+}
+
+/**
+ * Sets the caption and its small line centred in the band, measured from
+ * the rendered text rather than guessed from font sizes, and refuses to
+ * write a layout where it would touch the photos or the frame.
+ */
+async function caption(width: number, height: number, band: Band, title: string, sub: string, style: CaptionStyle): Promise<string> {
+  const cx = (band.left + band.right) / 2;
+  const trial = Math.round((band.top + band.bottom) / 2);
+  const ink = await inkBounds(width, height, captionText(cx, trial, title, sub, style));
+  const baseline = trial + Math.round((band.top + band.bottom - ink.top - ink.bottom) / 2);
+  const fragment = captionText(cx, baseline, title, sub, style);
+  const placed = await inkBounds(width, height, fragment);
+  const room = Math.min(placed.top - band.top, band.bottom - placed.bottom, placed.left - band.left, band.right - placed.right);
+  if (room < CAPTION_CLEARANCE) {
+    throw new Error(`"${title}" caption keeps ${room} px from its band, under the ${CAPTION_CLEARANCE} px it needs`);
+  }
+  return fragment;
+}
+
+/** The bottom edge of the lowest slot, where the caption band starts. */
+function slotsBottom(rects: Rect[]): number {
+  return Math.max(...rects.map((r) => r.y + r.h));
+}
+
+async function frame(width: number, height: number, rects: Rect[], title: string, sub: string): Promise<string> {
+  const band = { top: slotsBottom(rects), bottom: height - INNER, left: INNER, right: width - INNER };
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
     <rect width="${width}" height="${height}" fill="#f4efe4"/>
     <rect x="30" y="30" width="${width - 60}" height="${height - 60}" fill="none" stroke="#1d2621" stroke-width="3"/>
-    <rect x="40" y="40" width="${width - 80}" height="${height - 80}" fill="none" stroke="#b8923a" stroke-width="1.5"/>
-    ${inner}
-    <text x="${width / 2}" y="${captionY}" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="54" fill="#1d2621">${caption}</text>
-    <text x="${width / 2}" y="${captionY + 40}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="24" letter-spacing="6" fill="#7a5d24">${sub}</text>
+    <rect x="${INNER}" y="${INNER}" width="${width - 2 * INNER}" height="${height - 2 * INNER}" fill="none" stroke="#b8923a" stroke-width="1.5"/>
+    ${slotRects(rects)}
+    ${await caption(width, height, band, title, sub, CAPTION)}
   </svg>`;
 }
 
@@ -45,26 +107,30 @@ async function png(svg: string, file: string) {
 async function templates() {
   await mkdir(TEMPLATES, { recursive: true });
 
-  // 1. Two by two: the default. 720 x 480 slots, a caption band below.
+  // 1. Two by two: the default. Four 3:2 slots, as tall as the caption band allows.
   {
-    const sw = 720, sh = 480, gap = 30, top = 70;
+    const gap = 30, top = 70;
+    const sh = Math.floor((H - INNER - CAPTION_BAND - top - gap) / 2);
+    const sw = sh * 1.5;
     const left = (W - 2 * sw - gap) / 2;
     const rects = [0, 1].flatMap((r) => [0, 1].map((c) => ({ x: left + c * (sw + gap), y: top + r * (sh + gap), w: sw, h: sh })));
-    await png(frame(W, H, slotRects(rects), "Two by two", "PHOTO BOOTH"), path.join(TEMPLATES, "01-two-by-two.png"));
+    await png(await frame(W, H, rects, "Two by two", "PHOTO BOOTH"), path.join(TEMPLATES, "01-two-by-two.png"));
   }
 
   // 2. Big shot: one slot, for the large groups.
   {
-    const rects = [{ x: 70, y: 70, w: W - 140, h: 920 }];
-    await png(frame(W, H, slotRects(rects), "Big shot", "PHOTO BOOTH"), path.join(TEMPLATES, "02-big-shot.png"));
+    const top = 70;
+    const rects = [{ x: 70, y: top, w: W - 140, h: H - INNER - CAPTION_BAND - top }];
+    await png(await frame(W, H, rects, "Big shot", "PHOTO BOOTH"), path.join(TEMPLATES, "02-big-shot.png"));
   }
 
   // 3. Three up: portrait, three wide slots stacked.
   {
     const pw = H, ph = W;
-    const sw = pw - 140, sh = 440, gap = 30, top = 70;
+    const gap = 30, top = 70;
+    const sw = pw - 140, sh = Math.floor((ph - INNER - CAPTION_BAND - top - 2 * gap) / 3);
     const rects = [0, 1, 2].map((r) => ({ x: 70, y: top + r * (sh + gap), w: sw, h: sh }));
-    await png(frame(pw, ph, slotRects(rects), "Three up", "PHOTO BOOTH"), path.join(TEMPLATES, "03-three-up.png"));
+    await png(await frame(pw, ph, rects, "Three up", "PHOTO BOOTH"), path.join(TEMPLATES, "03-three-up.png"));
   }
 
   // 4. Double strip: portrait, two identical 50 x 148 mm strips side by
@@ -73,15 +139,22 @@ async function templates() {
   {
     const pw = H, ph = W;
     const half = pw / 2;
-    const sw = 480, sh = 420, gap = 30, top = 70;
+    const sw = 480, gap = 30, top = 70;
+    // No frame to sit inside: each strip's caption band ends as far from
+    // the bottom edge as its first photo starts from the top.
+    const sh = Math.floor((ph - top - CAPTION_BAND - top - 2 * gap) / 3);
     const rects = [0, 1, 2].flatMap((r) => [0, 1].map((s) => ({ x: s * half + (half - sw) / 2, y: top + r * (sh + gap), w: sw, h: sh })));
     const cut = `<line x1="${half}" y1="30" x2="${half}" y2="${ph - 30}" stroke="#b8923a" stroke-width="1" stroke-dasharray="12 10"/>`;
+    const captions = await Promise.all(
+      [0, 1].map((s) =>
+        caption(pw, ph, { top: slotsBottom(rects), bottom: ph - top, left: s * half, right: (s + 1) * half }, "Double strip", "PHOTO BOOTH", STRIP_CAPTION),
+      ),
+    );
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${pw}" height="${ph}" viewBox="0 0 ${pw} ${ph}">
       <rect width="${pw}" height="${ph}" fill="#f4efe4"/>
       ${slotRects(rects)}
       ${cut}
-      ${[0, 1].map((s) => `<text x="${s * half + half / 2}" y="${ph - 150}" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="40" fill="#1d2621">Double strip</text>
-      <text x="${s * half + half / 2}" y="${ph - 110}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" letter-spacing="5" fill="#7a5d24">PHOTO BOOTH</text>`).join("")}
+      ${captions.join("")}
     </svg>`;
     await png(svg, path.join(TEMPLATES, "04-double-strip.png"));
     await writeFile(path.join(TEMPLATES, "04-double-strip.json"), JSON.stringify({ shots: [1, 1, 2, 2, 3, 3] }, null, 2) + "\n");

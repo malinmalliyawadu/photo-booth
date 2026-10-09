@@ -199,6 +199,16 @@ maps slots to shots (`{"shots":[1,1,2,2,3,3]}` is the double strip) and
 may list text fields, which nothing draws yet: ingesting one adds a
 warning, so the words belong in the design.
 
+The PNGs in `templates/` are placeholders from `scripts/make-sample-assets.ts`,
+which centres each caption in the band under the photos by measuring the
+rendered text, and refuses to write a layout whose caption would come
+within `CAPTION_CLEARANCE` of a slot or the frame. **A changed PNG reaches
+fresh databases only**: the seed never loads a file name twice, and
+replacing a layout in place would redraw the sessions taken with it. An
+existing database takes the new artwork as an admin upload after deleting
+the old layout, which retires it if sessions used it (the README has the
+steps).
+
 ## The compositor (`packages/core/src/compositor.ts`, `packages/worker/src/compositor.ts`)
 
 Two renderers draw a session, and they must agree. Until it is

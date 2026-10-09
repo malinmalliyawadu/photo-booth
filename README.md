@@ -35,6 +35,17 @@ two slots share a shot:
 { "shots": [1, 1, 2, 2, 3, 3] }
 ```
 
+The four layouts in `templates/` are placeholders, drawn by
+`pnpm assets` and loaded by the seed the first time it sees each file.
+The seed never loads a file twice, so when a placeholder changes, a
+database that already has it keeps the old artwork until you replace
+it on `/admin`: delete the layout, then upload the new PNG from
+`templates/` under the same name (with `04-double-strip.json` as the
+sidecar for the double strip). Uploads join the end of the list, so
+replace all four in file order to keep the picker's order. A layout
+that sessions were taken with is retired rather than removed, so those
+sessions still show the artwork they were taken with.
+
 ## Filters
 
 On the review screen a guest picks a filter for their photos: colour,
