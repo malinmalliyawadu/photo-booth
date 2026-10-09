@@ -10,6 +10,7 @@ const Patch = z
     paused: z.boolean(),
     cameraMode: z.enum(["fake", "gphoto2", "ipad"]),
     countdownSeconds: z.number().int().min(1).max(15),
+    sounds: z.boolean(),
     paperLeft: z.number().int().min(0).max(999),
     paperTraySize: z.number().int().min(1).max(999),
     inkLeft: z.number().int().min(0).max(999),
@@ -21,7 +22,7 @@ const Patch = z
   .partial()
   .strict();
 
-/** The attendant's knobs: pause, camera, countdown, paper and ink, locked layout, filters, event name. */
+/** The attendant's knobs: pause, camera, countdown, sounds, paper and ink, locked layout, filters, event name. */
 export async function PATCH(request: Request) {
   try {
     const parsed = Patch.safeParse(await readJson(request));

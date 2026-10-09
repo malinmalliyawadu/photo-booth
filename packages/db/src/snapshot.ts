@@ -20,6 +20,8 @@ export interface Snapshot {
     paused: boolean;
     cameraMode: CameraMode;
     countdownSeconds: number;
+    /** Whether the kiosk plays its ticks, shutter and chime. */
+    sounds: boolean;
     /** Postcards in the paper tray, and how many it holds. */
     paperLeft: number;
     paperTraySize: number;
@@ -142,6 +144,7 @@ export async function readSnapshot(): Promise<Snapshot> {
       paused: settings.paused,
       cameraMode: settings.cameraMode,
       countdownSeconds: settings.countdownSeconds,
+      sounds: settings.sounds,
       paperLeft: settings.paperLeft,
       paperTraySize: settings.paperTraySize,
       inkLeft: settings.inkLeft,

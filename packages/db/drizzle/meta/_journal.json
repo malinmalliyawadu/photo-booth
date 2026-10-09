@@ -57,6 +57,13 @@
       "when": 1791584746023,
       "tag": "0007_ipad_camera_default",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791589497215,
+      "tag": "0008_kiosk_sounds",
+      "breakpoints": true
     }
   ]
 }

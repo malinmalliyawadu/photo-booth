@@ -17,7 +17,9 @@ pnpm dev                      # https://localhost:3100 + the worker
 ```
 
 Your browser will warn about the certificate until you trust
-`ops/certs/ca.crt`. The kiosk is `/`, the attendant's page is `/admin`,
+`ops/certs/ca.crt`. The kiosk is `/`, the attendant's page is `/admin`
+(Live: status, supplies and pause; Sessions: reprint, send again,
+delete; Setup: event, camera, countdown, sounds, looks and layouts),
 the TV is `/slideshow`.
 
 ```bash

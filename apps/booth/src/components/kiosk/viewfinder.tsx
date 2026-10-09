@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
 import { viewfinderCrop, type Slot } from "@booth/core";
+import { Corners } from "@/components/chrome";
 
 /**
  * The live preview, cropped to what the layout will keep of this shot.
  * The box takes the crop's shape and is as large as the screen allows;
  * the child (the video, the liveview, the fake) is drawn at the camera
  * frame's full size and shifted so only the crop shows. The child must
- * fill its parent; its aspect ratio already matches the frame's.
+ * fill its parent; its aspect ratio already matches the frame's. Film
+ * corners mark the crop's edge, so the guests see where the photo ends.
  */
 export function Viewfinder({
   frame,
@@ -23,7 +25,7 @@ export function Viewfinder({
   const crop = viewfinderCrop(frame, slots, shot);
   const ratio = (crop.width * frame.width) / (crop.height * frame.height);
   return (
-    <div className="flex h-full w-full items-center justify-center bg-night [container-type:size]" data-testid="viewfinder">
+    <div className="flex h-full w-full items-center justify-center bg-velvet [container-type:size]" data-testid="viewfinder">
       <div
         className="relative overflow-hidden"
         style={{ aspectRatio: `${ratio}`, width: `min(100cqw, calc(100cqh * ${ratio}))` }}
@@ -40,6 +42,7 @@ export function Viewfinder({
         >
           {children}
         </div>
+        <Corners className="inset-5" />
       </div>
     </div>
   );

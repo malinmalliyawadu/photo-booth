@@ -1,81 +1,109 @@
 @import "tailwindcss";
 
 /*
- * Design language: a darkened room with one warm lamp.
+ * Design language: the gilded darkroom.
  *
- * The booth lives in a dim venue, so every screen is night-dark with
- * cream type and a single ember accent for the thing to tap. Fraunces
- * for the words a guest reads at a glance, Figtree for everything else,
- * Plex Mono for IDs and counts. One theme, no light mode: the admin page
- * is read on a phone in the same room.
+ * The booth lives in a dim venue, so every screen is velvet-dark with a
+ * faint aubergine cast, ivory type, and one accent: champagne gold, the
+ * light catching brass. Hairline gold frames borrow from an invitation,
+ * film-corner brackets from a viewfinder, and every print is shown on
+ * an ivory mat the way it comes out of the tray. Bodoni Moda carries
+ * every big word, Instrument Sans the controls, Geist Mono the IDs and
+ * counts. One theme, no light mode: the admin page is read on a phone
+ * in the same room.
  */
 
 @theme {
   --color-*: initial;
 
   /* Surfaces */
-  --color-night: #0f1113;
-  --color-night-raised: #181b1f;
-  --color-night-lifted: #22262c;
-  --color-night-edge: #2e333a;
+  --color-velvet: #0d0a0f;
+  --color-velvet-raised: #16111a;
+  --color-velvet-lifted: #211a26;
+  --color-velvet-edge: #332a39;
 
   /* Type */
-  --color-cream: #f3ede2;
-  --color-cream-soft: #b7b0a3;
-  --color-cream-faint: #7d776c;
+  --color-ivory: #f7f1e6;
+  --color-ivory-soft: #c9bfae;
+  --color-ivory-faint: #8a7f70;
 
-  /* The one warm thing in the room */
-  --color-ember: #e8743b;
-  --color-ember-bright: #f59a6a;
-  --color-ember-deep: #b5521f;
-  --color-ember-tint: #3a2419;
+  /* The one accent: champagne gold */
+  --color-gold: #d9b56a;
+  --color-gold-bright: #f0d79a;
+  --color-gold-deep: #9a7a3a;
+  --color-gold-tint: #2a2216;
 
   /* Semantics */
-  --color-mint: #8fd3b0;
-  --color-mint-tint: #1d3328;
-  --color-rose: #e07a85;
-  --color-rose-tint: #3b1f23;
-  --color-gold: #e3c179;
-  --color-gold-tint: #3a311b;
+  --color-sage: #9fcfae;
+  --color-sage-tint: #19291f;
+  --color-amber: #e8b45a;
+  --color-amber-tint: #2f2412;
+  --color-claret: #e8788a;
+  --color-claret-tint: #381a22;
 
-  --font-display: var(--font-fraunces);
-  --font-sans: var(--font-figtree);
-  --font-mono: var(--font-plex-mono);
+  --font-display: var(--font-bodoni);
+  --font-sans: var(--font-instrument);
+  --font-mono: var(--font-geist-mono);
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
 
-  --animate-rise: rise 700ms var(--ease-out-expo) both;
-  --animate-flash: flash 650ms ease-out both;
-  --animate-pulse-soft: pulse-soft 2.4s ease-in-out infinite;
-  --animate-tick: tick 1s var(--ease-out-expo) both;
-  --animate-drift: drift 40s linear infinite;
-  --animate-breathe: breathe 6s ease-in-out infinite;
+  --animate-rise: rise 800ms var(--ease-out-expo) both;
+  --animate-fade: fade 600ms ease-out both;
+  --animate-flash: flash 700ms ease-out both;
+  --animate-tick: tick 900ms var(--ease-out-expo) both;
+  --animate-breathe: breathe 3.2s ease-in-out infinite;
+  --animate-glow: glow 3.2s ease-in-out infinite;
+  --animate-drift: drift 60s linear infinite;
+  --animate-kenburns: kenburns 9s ease-in-out both;
+  --animate-develop: develop 1.8s ease-in-out infinite;
+  --animate-spin-slow: spin 1.4s linear infinite;
+  --animate-drain: drain 1s linear both;
 
   @keyframes rise {
-    from { opacity: 0; transform: translateY(18px); }
+    from { opacity: 0; transform: translateY(22px); }
     to { opacity: 1; transform: none; }
+  }
+  @keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   @keyframes flash {
     0% { opacity: 1; }
     100% { opacity: 0; }
   }
-  @keyframes pulse-soft {
-    0%, 100% { opacity: 0.55; }
-    50% { opacity: 1; }
-  }
+  /* Starts visible on purpose: a numeral must read even on a frame the compositor skips. */
   @keyframes tick {
-    0% { opacity: 0; transform: scale(1.35); }
-    30% { opacity: 1; transform: scale(1); }
-    100% { opacity: 1; transform: scale(0.96); }
+    0% { opacity: 0.35; transform: scale(1.22); }
+    40% { opacity: 1; transform: scale(1); }
+    100% { opacity: 1; transform: scale(0.97); }
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.035); }
+  }
+  @keyframes glow {
+    0%, 100% { box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35), 0 18px 60px -12px rgb(217 181 106 / 0.45); }
+    50% { box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35), 0 22px 80px -8px rgb(217 181 106 / 0.75); }
   }
   @keyframes drift {
     from { transform: translateX(0); }
     to { transform: translateX(-50%); }
   }
-  @keyframes breathe {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.04); }
+  @keyframes kenburns {
+    from { transform: scale(1); }
+    to { transform: scale(1.045); }
+  }
+  @keyframes develop {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes drain {
+    from { stroke-dashoffset: 0; }
+    to { stroke-dashoffset: var(--ring-length); }
   }
 }
 
@@ -94,9 +122,10 @@
 
 @layer base {
   html {
-    background: var(--color-night);
-    color: var(--color-cream);
+    background: var(--color-velvet);
+    color: var(--color-ivory);
     font-family: var(--font-sans);
+    font-optical-sizing: auto;
     -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
@@ -116,61 +145,141 @@
     cursor: pointer;
     font: inherit;
   }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--color-gold);
+    outline-offset: 3px;
+  }
   ::selection {
-    background: var(--color-ember);
-    color: var(--color-night);
+    background: var(--color-gold);
+    color: var(--color-velvet);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-drift, .animate-breathe, .animate-glow, .animate-kenburns, .animate-develop {
+      animation: none;
+    }
+    .animate-rise, .animate-tick, .animate-fade {
+      animation-duration: 1ms;
+    }
   }
 }
 
 @layer components {
+  /* Type */
   .display {
     font-family: var(--font-display);
-    font-variation-settings: "opsz" 144, "SOFT" 50, "WONK" 1;
-    letter-spacing: -0.01em;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    line-height: 1;
   }
   .display-italic {
     font-family: var(--font-display);
     font-style: italic;
-    font-variation-settings: "opsz" 144, "SOFT" 80, "WONK" 1;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    line-height: 1;
   }
   .eyebrow {
     font-family: var(--font-sans);
     font-size: 0.72rem;
     font-weight: 600;
-    letter-spacing: 0.22em;
+    letter-spacing: 0.26em;
     text-transform: uppercase;
-    color: var(--color-cream-faint);
+    color: var(--color-gold);
+  }
+  .eyebrow-dim {
+    color: var(--color-ivory-faint);
   }
   .mono {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
   }
 
-  /* The big tap target: a guest taps this with the back of a finger holding a drink. */
+  /* A gold hairline with a soft fade at both ends, between things. */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(to right, transparent, color-mix(in srgb, var(--color-gold) 70%, transparent) 20%, color-mix(in srgb, var(--color-gold) 70%, transparent) 80%, transparent);
+  }
+
+  /* The dark room's texture: a faint grain over everything dark. */
+  .grain {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    opacity: 0.07;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    background-size: 220px 220px;
+  }
+
+  /* A lamp from above: the spotlight every dark screen sits under. */
+  .spotlight {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 70% 55% at 50% -10%, rgb(217 181 106 / 0.16), transparent 70%),
+      radial-gradient(ellipse 90% 60% at 50% 110%, rgb(43 24 46 / 0.65), transparent 70%);
+  }
+
+  /* A print as it comes out of the tray: an ivory mat and a deep shadow. */
+  .mat {
+    background: var(--color-ivory);
+    padding: 2.5%;
+    box-shadow: 0 1px 0 rgb(255 255 255 / 0.5) inset, 0 40px 90px -30px rgb(0 0 0 / 0.9), 0 12px 30px -12px rgb(0 0 0 / 0.7);
+  }
+  .mat-thin {
+    padding: 1.5%;
+  }
+
+  /* The big tap target: tapped with the back of a finger holding a drink. */
   .tap {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.75rem;
+    gap: 0.8rem;
     min-height: 5.5rem;
-    padding: 0 3rem;
+    padding: 0 3.25rem;
     border-radius: 999px;
-    background: var(--color-ember);
-    color: var(--color-night);
+    background: linear-gradient(180deg, var(--color-gold-bright), var(--color-gold) 55%, #c9a35a);
+    color: var(--color-velvet);
     font-family: var(--font-sans);
     font-size: 1.75rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.3), 0 18px 50px -12px rgb(232 116 59 / 0.55);
-    transition: transform 120ms var(--ease-out-expo), background 120ms;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35), 0 18px 60px -12px rgb(217 181 106 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.5);
+    transition: transform 140ms var(--ease-out-expo), filter 140ms;
   }
-  .tap:active { transform: scale(0.97); background: var(--color-ember-bright); }
-  .tap-quiet {
-    background: transparent;
-    color: var(--color-cream-soft);
-    box-shadow: inset 0 0 0 2px var(--color-night-edge);
+  .tap:active { transform: scale(0.97); filter: brightness(1.06); }
+  .tap:disabled { opacity: 0.55; cursor: not-allowed; }
+  .tap-ghost {
+    background: rgb(13 10 15 / 0.45);
+    color: var(--color-ivory);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ivory) 28%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
   }
-  .tap-quiet:active { background: var(--color-night-lifted); color: var(--color-cream); }
+  .tap-ghost:active { background: rgb(247 241 230 / 0.12); filter: none; }
+  .tap-sm {
+    min-height: 3.75rem;
+    padding: 0 1.75rem;
+    font-size: 1.2rem;
+    gap: 0.6rem;
+  }
+
+  /* Film-frame corner brackets, on the viewfinder and the invitation frame. */
+  .corner {
+    position: absolute;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-color: var(--color-gold);
+    border-style: solid;
+    border-width: 0;
+    opacity: 0.9;
+  }
+  .corner-tl { top: 0; left: 0; border-top-width: 1.5px; border-left-width: 1.5px; }
+  .corner-tr { top: 0; right: 0; border-top-width: 1.5px; border-right-width: 1.5px; }
+  .corner-bl { bottom: 0; left: 0; border-bottom-width: 1.5px; border-left-width: 1.5px; }
+  .corner-br { bottom: 0; right: 0; border-bottom-width: 1.5px; border-right-width: 1.5px; }
 
   /* Admin controls, phone-sized */
   .btn {
@@ -178,66 +287,105 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    min-height: 2.75rem;
+    min-height: 2.875rem;
     padding: 0 1.1rem;
-    border-radius: 0.75rem;
-    background: var(--color-night-lifted);
-    color: var(--color-cream);
+    border-radius: 0.875rem;
+    background: var(--color-velvet-lifted);
+    color: var(--color-ivory);
     font-size: 0.9375rem;
     font-weight: 600;
-    box-shadow: inset 0 0 0 1px var(--color-night-edge);
-    transition: background 120ms, transform 120ms;
+    box-shadow: inset 0 0 0 1px var(--color-velvet-edge);
+    transition: background 120ms, transform 120ms, opacity 120ms;
   }
-  .btn:active { transform: scale(0.98); }
+  .btn:active { transform: scale(0.98); background: var(--color-velvet-edge); }
   .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-  .btn-primary { background: var(--color-ember); color: var(--color-night); box-shadow: none; }
-  .btn-danger { color: var(--color-rose); }
+  .btn-primary {
+    background: linear-gradient(180deg, var(--color-gold-bright), var(--color-gold) 60%, #c9a35a);
+    color: var(--color-velvet);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45);
+  }
+  .btn-primary:active { background: var(--color-gold); }
+  .btn-danger { color: var(--color-claret); }
+  .btn-icon { min-width: 2.875rem; padding: 0; }
   .field {
     width: 100%;
-    min-height: 2.75rem;
+    min-height: 2.875rem;
     padding: 0 0.9rem;
-    border-radius: 0.75rem;
-    background: var(--color-night);
-    color: var(--color-cream);
-    box-shadow: inset 0 0 0 1px var(--color-night-edge);
+    border-radius: 0.875rem;
+    background: var(--color-velvet);
+    color: var(--color-ivory);
+    box-shadow: inset 0 0 0 1px var(--color-velvet-edge);
     font-size: 1rem;
+    appearance: none;
+    -webkit-appearance: none;
   }
-  .field:focus { outline: none; box-shadow: inset 0 0 0 2px var(--color-ember); }
+  .field:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--color-gold); }
   .file-input {
     display: block;
     width: 100%;
-    margin-top: 0.25rem;
+    margin-top: 0.35rem;
     font-size: 0.875rem;
-    color: var(--color-cream-soft);
+    color: var(--color-ivory-soft);
   }
   .file-input::file-selector-button {
     margin-right: 0.75rem;
-    padding: 0.4rem 0.8rem;
+    padding: 0.45rem 0.85rem;
     border: 0;
-    border-radius: 0.5rem;
-    background: var(--color-night-lifted);
-    color: var(--color-cream);
+    border-radius: 0.6rem;
+    background: var(--color-velvet-lifted);
+    color: var(--color-ivory);
     font: inherit;
     font-weight: 600;
-    box-shadow: inset 0 0 0 1px var(--color-night-edge);
+    box-shadow: inset 0 0 0 1px var(--color-velvet-edge);
   }
   .card {
-    background: var(--color-night-raised);
+    position: relative;
+    background: linear-gradient(180deg, var(--color-velvet-raised), color-mix(in srgb, var(--color-velvet-raised) 70%, var(--color-velvet)));
     border-radius: 1.25rem;
-    box-shadow: inset 0 0 0 1px var(--color-night-edge);
+    box-shadow: inset 0 0 0 1px var(--color-velvet-edge), 0 20px 50px -30px rgb(0 0 0 / 0.8);
+  }
+  .card-gold {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-gold) 45%, transparent), 0 20px 50px -30px rgb(0 0 0 / 0.8);
   }
   .pill {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.2rem 0.65rem;
+    padding: 0.25rem 0.7rem;
     border-radius: 999px;
     font-size: 0.75rem;
     font-weight: 600;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
   }
-  .pill-ok { background: var(--color-mint-tint); color: var(--color-mint); }
-  .pill-warn { background: var(--color-gold-tint); color: var(--color-gold); }
-  .pill-error { background: var(--color-rose-tint); color: var(--color-rose); }
-  .pill-off { background: var(--color-night-lifted); color: var(--color-cream-faint); }
+  .pill-ok { background: var(--color-sage-tint); color: var(--color-sage); }
+  .pill-warn { background: var(--color-amber-tint); color: var(--color-amber); }
+  .pill-error { background: var(--color-claret-tint); color: var(--color-claret); }
+  .pill-off { background: var(--color-velvet-lifted); color: var(--color-ivory-faint); }
+  .pill-gold { background: var(--color-gold-tint); color: var(--color-gold); }
+
+  /* A switch, iOS-sized, gold when on. */
+  .switch {
+    position: relative;
+    width: 3.25rem;
+    height: 2rem;
+    flex: none;
+    border-radius: 999px;
+    background: var(--color-velvet-edge);
+    transition: background 180ms;
+  }
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 0.25rem;
+    left: 0.25rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    background: var(--color-ivory);
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.4);
+    transition: transform 180ms var(--ease-out-expo);
+  }
+  .switch[aria-checked="true"] { background: var(--color-gold); }
+  .switch[aria-checked="true"]::after { transform: translateX(1.25rem); background: var(--color-velvet); }
 }

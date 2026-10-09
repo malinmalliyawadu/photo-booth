@@ -1,0 +1,1 @@
+ALTER TABLE "booth" ADD COLUMN "sounds" boolean DEFAULT true NOT NULL;
