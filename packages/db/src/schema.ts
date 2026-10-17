@@ -19,6 +19,7 @@ import {
   PAPER_TRAY_SHEETS,
   PROP_IDS,
   type CameraMode,
+  type PoseId,
   type Face,
   type FilterId,
   type Phase,
@@ -61,6 +62,8 @@ export const booth = pgTable(
       .default(PROP_IDS.filter((id) => id !== "none")),
     /** Copies a guest may print of each session from the kiosk; 0 switches the button off. */
     guestCopyLimit: integer("guest_copy_limit").notNull().default(GUEST_COPY_LIMIT_DEFAULT),
+    /** Whether the kiosk offers pose ideas before posing; off skips the step. */
+    poseIdeas: boolean("pose_ideas").notNull().default(true),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (t) => [check("booth_singleton", sql`${t.id} = 1`)],
@@ -122,6 +125,8 @@ export const sessions = pgTable(
     prop: text("prop").$type<PropId>().notNull().default("none"),
     /** Drawn flipped, the way the mirror showed the guest; the files are never flipped. */
     mirrored: boolean("mirrored").notNull().default(false),
+    /** One idea per shot, shown over the viewfinder while counting down; null when the guests wanted none. Fixed from the start. */
+    poses: jsonb("poses").$type<PoseId[]>(),
     phase: text("phase").$type<Phase>().notNull(),
     shot: integer("shot").notNull(),
     shotCount: integer("shot_count").notNull(),

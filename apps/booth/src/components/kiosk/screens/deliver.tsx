@@ -3,7 +3,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect } from "react";
 import { Check, Printer, QrCode } from "lucide-react";
-import { spellShortId } from "@booth/core";
 import type { SessionView, TemplateSummary } from "@booth/db";
 import { Grain, Spotlight } from "@/components/chrome";
 import { Composite, sessionPhotos } from "@/components/composite";
@@ -58,7 +57,6 @@ export function DeliverScreen({
             <span className="absolute top-1/2 -left-3 h-6 w-6 -translate-y-1/2 rounded-full bg-velvet" aria-hidden />
             <span className="absolute top-1/2 -right-3 h-6 w-6 -translate-y-1/2 rounded-full bg-velvet" aria-hidden />
             <img src={`/api/sessions/${session.id}/qr`} alt="QR code for your photos" className="h-[31dvh] w-[31dvh]" data-testid="qr" />
-            <p className="mono mt-4 text-base tracking-[0.2em] text-velvet/70">{spellShortId(session.id)}</p>
             <div className="mt-4 w-full border-t border-dashed border-velvet/25" aria-hidden />
             <p className="display-italic mt-4 flex items-center gap-2 text-3xl">
               <QrCode className="h-6 w-6" /> Scan to keep them

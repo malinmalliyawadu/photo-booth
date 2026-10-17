@@ -1,9 +1,9 @@
 # Photo booth
 
-A guest taps the iPad, picks a layout, tries on props (a crown, heart
-glasses) live, poses through a countdown with one shot per photo slot,
-picks a filter, and gets a QR code to their
-photos. One postcard print comes out for the guestbook. The booth has
+A guest taps the iPad, picks a layout, takes a pose idea per photo if
+they want one, tries on props (a crown, heart glasses) live, poses
+through a countdown with one shot per photo slot, picks a filter, and
+gets a QR code to their photos. One postcard print comes out for the guestbook. The booth has
 internet at the venue: the event's own site, where guests upload their
 phone photos too, fills with the booth's photos as sessions finish.
 
@@ -21,7 +21,7 @@ Vitest for pure modules, Playwright for the kiosk's happy path.
 | --- | --- | --- |
 | `apps/booth` | Next.js: kiosk (`/`), admin (`/admin`, `/admin/sessions`, `/admin/setup`), slideshow (`/slideshow`), the session API, the SSE stream, `/media` | The controller, or Coolify |
 | `packages/worker` | Node process: camera, compositor, the CUPS printer, the gallery sync, the jobs lanes | The controller, or Coolify |
-| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants and the paper and ink counts, the IPP codec and what the printer's states mean, the filter catalogue and its pixel arithmetic, the faces a photo holds and the face props' catalogue, artwork and placement, the compositor's geometry, the `Camera` interface, the iPad capture plan and viewfinder crop, the gallery setting and sync plan | The app and the worker |
+| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants and the paper and ink counts, the IPP codec and what the printer's states mean, the filter catalogue and its pixel arithmetic, the faces a photo holds and the face props' catalogue, artwork and placement, the pose ideas and their planner, the compositor's geometry, the `Camera` interface, the iPad capture plan and viewfinder crop, the gallery setting and sync plan | The app and the worker |
 | `packages/db` | Drizzle schema + migrations, the repositories, the data directory, the snapshot | The app and the worker |
 | `templates/` | Layout PNGs and optional JSON sidecars; the seed loads them | Uploaded through admin on the night |
 | `ops/` | `tailscale.sh` (the booth's HTTPS address on the tailnet), `printer.sh` (the SELPHY's CUPS queue: USB on Linux, AirPrint on a Mac), `ca.sh` (the private certificate authority for `pnpm dev`); systemd units and the soak test arrive in phase 6 | The controller |
@@ -200,6 +200,35 @@ to the files:
   only). `booth.props` is which ones the attendant offers; none
   offered skips the step and the review's tab.
 
+## Pose ideas (`packages/core/src/poses.ts`)
+
+For the guests who freeze when the countdown starts. With
+`booth.poseIdeas` on (Setup; the default), the step after the layout
+asks "Want some pose ideas?" beside the viewfinder: one idea per photo
+("Big smiles", "Back to back", "Jump!", a title of two to four words,
+a line on how to do it and a picture of it), drawn by `planPoses` to
+climb from a classic to a wild one (`energyLadder`), with "Other
+ideas" drawing again. The pictures (`pose-art.ts`) are stick figures
+built from joint angles by one small figure builder, so every idea is
+one style and a new one is a line of numbers: ivory on nothing, in the
+same SVG subset as the props, shown as a data URL (`poseImageUrl`) in
+the plan and beside the idea on the countdown. On the iPad the live tracker counts the faces in the frame and
+the plan is for that many (the most seen at once, so a face lost for a
+moment does not reshuffle it); with another camera, no detector or
+nobody in the frame yet, only what one person can do is suggested
+(`poseFits`). The guests who take them go on to the props, or straight
+into the countdown, and `POST /api/sessions` carries the plan as
+`poses`; `startSession` checks it is one known idea per shot and that
+the booth offers them, and stores it on `sessions.poses`, fixed from
+then on, so a reload mid-count and a retake show the same ideas. The
+session's countdown is the booth's plus `POSE_READING_SECONDS`
+(`countdownWith`), time to read. `LiveScreen` shows the shot's idea
+across the top from the first tick until the photo is taken, and the
+admin Live card names it. The guests who know what to do start without
+(`poses` null) at the booth's own countdown. Nothing about an idea
+reaches the files or the print; the catalogue is closed, there is no
+per-idea setting.
+
 ## How a screen works
 
 Every screen opens `GET /api/events` (Server-Sent Events) and redraws
@@ -350,7 +379,7 @@ the context. `booth.sounds` switches them off from Setup.
 - **Admin is three tabs on three routes**: Live (`/admin`: the verdict,
   the components, the guest in the booth, the supplies, pause),
   Sessions (reprint, send again, delete) and Setup (event, camera,
-  countdown, sounds, the looks and the layouts). The route group's
+  countdown, sounds, pose ideas, the looks and the layouts). The route group's
   layout reads the snapshot once and `AdminShell` shares it with every
   tab over the stream, so switching tabs does not reconnect. The tab
   bar sits at the thumb on a phone and becomes a rail on anything wider.
@@ -493,7 +522,7 @@ the context. `booth.sounds` switches them off from Setup.
 4. **Printing** - built, not yet run on the printer: the SELPHY CP1300 over USB through CUPS and Gutenprint, the paper and ink counts (see **The printer is CUPS over IPP**). Left for the hardware: run `ops/printer.sh` and `pnpm print:test` on the controller, set `SAFE_MARGIN_MM` from the card, and confirm the printer's out-of-paper and jam reports reach the admin card; on a Mac, by AirPrint, also that the card comes out borderless and the right way round.
 5. **Gallery and QR** - done, ahead of order, as the push to the event's site (see **The gallery**) and the wedding-planner's `/api/booth/photos` and `/i/booth/{id}`.
 6. **Hardening** - systemd, a watchdog, recovery after a power cut, the 4-hour soak test.
-7. **Polish** - in progress: the gilded-darkroom redesign of the kiosk, the admin page and the TV (see **The look**), the sounds, the retake button and the face props are done; left: final artwork, whatever the hallway tests turn up.
+7. **Polish** - in progress: the gilded-darkroom redesign of the kiosk, the admin page and the TV (see **The look**), the sounds, the retake button, the face props and the pose ideas are done; left: final artwork, whatever the hallway tests turn up.
 
 Phase 4 is the gated one (and 3, for a DSLR) and needs the hardware in the room by
 the end of October 2026. The full dress rehearsal is in February 2027.

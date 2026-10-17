@@ -21,11 +21,12 @@ const Patch = z
     // Catalogue order, no duplicates; "no props" is always a choice, so it is never stored.
     props: z.array(z.enum(PROP_IDS)).transform(offeredProps),
     guestCopyLimit: z.number().int().min(0).max(GUEST_COPY_LIMIT_MAX),
+    poseIdeas: z.boolean(),
   })
   .partial()
   .strict();
 
-/** The attendant's knobs: pause, camera, countdown, sounds, paper and ink, locked layout, filters, props, guests' copies, event name. */
+/** The attendant's knobs: pause, camera, countdown, sounds, paper and ink, locked layout, filters, props, pose ideas, guests' copies, event name. */
 export async function PATCH(request: Request) {
   try {
     const parsed = Patch.safeParse(await readJson(request));

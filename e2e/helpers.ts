@@ -48,6 +48,8 @@ export async function resetBooth(request: APIRequestContext): Promise<void> {
       filters: [...ALL_FILTERS],
       props: [...ALL_PROPS],
       guestCopyLimit: 1,
+      // Off for most specs, which walk from the picker into the countdown; poses.spec.ts turns it on.
+      poseIdeas: false,
     },
   });
 }

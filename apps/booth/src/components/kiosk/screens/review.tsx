@@ -184,7 +184,7 @@ export function ReviewScreen({
       </div>
 
       <footer className="relative flex items-center justify-end gap-4">
-        <button type="button" onClick={onRetake} className="tap tap-ghost" disabled={busy}>
+        <button type="button" onClick={onRetake} className="tap tap-ghost" disabled={busy} data-testid="retake">
           <RotateCcw className="h-7 w-7" /> Retake
         </button>
         <button type="button" onClick={onAccept} className="tap" disabled={busy} data-testid="accept">

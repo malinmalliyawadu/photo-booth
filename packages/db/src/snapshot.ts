@@ -7,6 +7,7 @@ import {
   type Face,
   type FilterId,
   type Phase,
+  type PoseId,
   type PrintStatus,
   type PropId,
   type Slot,
@@ -46,6 +47,8 @@ export interface Snapshot {
     props: PropId[];
     /** Copies a guest may print of each session from the kiosk; 0 is off. */
     guestCopyLimit: number;
+    /** Whether the kiosk offers pose ideas before posing; off skips the step. */
+    poseIdeas: boolean;
   };
   components: Record<ComponentName, { status: ComponentStatus; detail: string; seenAt: string } | undefined>;
   templates: TemplateSummary[];
@@ -81,6 +84,8 @@ export interface SessionView {
   prop: PropId;
   /** The photos are drawn flipped, the way the mirror showed the guest. */
   mirrored: boolean;
+  /** One pose idea per shot, shown while counting down; null when the guests wanted none. */
+  poses: PoseId[] | null;
   phase: Phase;
   shot: number;
   shotCount: number;
@@ -171,6 +176,7 @@ export async function readSnapshot(): Promise<Snapshot> {
       filters: offeredFilters(settings.filters),
       props: offeredProps(settings.props),
       guestCopyLimit: settings.guestCopyLimit,
+      poseIdeas: settings.poseIdeas,
     },
     components: componentMap,
     templates: templateRows.map((t) => ({
@@ -202,6 +208,7 @@ function toView(row: SessionRow, shotRows: ShotRow[]): SessionView {
     filter: row.filter,
     prop: row.prop,
     mirrored: row.mirrored,
+    poses: row.poses,
     phase: row.phase,
     shot: row.shot,
     shotCount: row.shotCount,

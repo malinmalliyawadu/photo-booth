@@ -6,6 +6,8 @@ export * from "./filters";
 export * from "./gallery";
 export * from "./ipp";
 export * from "./kiosk-capture";
+export * from "./pose-art";
+export * from "./poses";
 export * from "./print";
 export * from "./printer";
 export * from "./props";

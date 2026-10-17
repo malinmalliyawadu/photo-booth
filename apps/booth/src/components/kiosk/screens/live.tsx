@@ -2,30 +2,26 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useRef, useState } from "react";
-import { Camera, X } from "lucide-react";
-import { cssFilter, type CameraMode } from "@booth/core";
+import { X } from "lucide-react";
+import { cssFilter, poseById, poseImageUrl, type CameraMode } from "@booth/core";
 import type { SessionView, TemplateSummary } from "@booth/db";
 import { CoveredPhoto, sessionPhotos } from "@/components/composite";
+import { CameraPreview } from "../camera-preview";
 import { useCountdown } from "../countdown";
 import type { FaceFinder } from "../face-finder";
-import { LiveCamera } from "../live-camera";
 import type { Sounds } from "../sounds";
 import type { IpadCamera } from "../use-ipad-camera";
 import { useIpadCapture } from "../use-ipad-capture";
-import { Viewfinder } from "../viewfinder";
 
-const PREVIEW_STREAM_URL = "/preview/stream";
-
-/** Stand-ins for the camera frame's shape until the camera reports it. */
-export const IPAD_FRAME = { width: 4, height: 3 };
-const DSLR_FRAME = { width: 3, height: 2 };
 /** The thumbnails of the photos taken so far, along the foot. */
 const THUMB_BOX = { width: 4, height: 3 };
 
 /**
  * Posing. The viewfinder fills the screen, cropped to the slot; the
  * countdown is a numeral inside an aperture ring that drains to zero;
- * the photos already taken collect as small prints along the foot.
+ * the photos already taken collect as small prints along the foot. A
+ * session that took the pose ideas has this shot's idea across the top,
+ * from the first tick until the photo is taken.
  */
 export function LiveScreen({
   session,
@@ -53,7 +49,6 @@ export function LiveScreen({
   const ipad = cameraMode === "ipad";
   const video = useRef<HTMLVideoElement>(null);
   const { flash, error: captureError } = useIpadCapture(ipad, session, video, finder);
-  const [frame, setFrame] = useState<{ width: number; height: number } | null>(null);
   const photos = sessionPhotos(session.shots);
   const freshShot = session.shots.at(-1);
   const cameraError = ipad ? (captureError ?? (camera.health.status === "error" ? camera.health.detail : null)) : null;
@@ -61,6 +56,7 @@ export function LiveScreen({
   // are on the preview only: the frame the iPad reads from the video
   // underneath is the camera's own, and the file stays that way.
   const look = cssFilter(session.filter);
+  const pose = session.poses ? poseById(session.poses[session.shot - 1] ?? session.poses[0]!) : null;
 
   // A tick on every second of the countdown, the shutter at its zero.
   const counting = session.phase === "countdown" && !capturing ? left : 0;
@@ -82,24 +78,7 @@ export function LiveScreen({
       data-mirrored={session.mirrored}
     >
       <div className="absolute inset-0">
-        <Viewfinder frame={frame ?? (ipad ? IPAD_FRAME : DSLR_FRAME)} slots={template.slots} shot={session.shot}>
-          {ipad ? (
-            <LiveCamera stream={camera.stream} videoRef={video} frame={frame} onFrame={setFrame} finder={finder} prop={session.prop} look={look} />
-          ) : (
-            <div className="h-full w-full" style={{ filter: look }} data-testid="viewfinder-look">
-              {cameraMode === "gphoto2" ? (
-                <img
-                  src={PREVIEW_STREAM_URL}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  onLoad={(e) => setFrame({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
-                />
-              ) : (
-                <FakeViewfinder />
-              )}
-            </div>
-          )}
-        </Viewfinder>
+        <CameraPreview cameraMode={cameraMode} camera={camera} finder={finder} slots={template.slots} shot={session.shot} prop={session.prop} look={look} videoRef={video} />
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(13,10,15,0.6)_0%,rgba(13,10,15,0)_28%,rgba(13,10,15,0)_62%,rgba(13,10,15,0.8)_100%)]" />
       </div>
 
@@ -120,6 +99,16 @@ export function LiveScreen({
             Photo {session.shot} of {session.shotCount}
           </p>
         </div>
+        {pose && (
+          <div key={session.shot} className="flex max-w-3xl animate-rise items-center gap-5 px-6 [text-shadow:0_4px_30px_rgba(0,0,0,0.7)]" data-testid="pose" data-pose={pose.id}>
+            <img src={poseImageUrl(pose.id)} alt="" className="h-32 w-32 shrink-0 drop-shadow-[0_6px_24px_rgba(0,0,0,0.7)]" draggable={false} />
+            <div>
+              <p className="eyebrow">Pose idea</p>
+              <p className="display-italic mt-2 text-[clamp(2.75rem,5.5vw,4.5rem)] leading-none text-gold-bright">{pose.title}</p>
+              <p className="mt-3 text-2xl text-ivory-soft">{pose.hint}</p>
+            </div>
+          </div>
+        )}
         <button type="button" onClick={onCancel} className="tap tap-ghost tap-sm">
           <X className="h-5 w-5" /> Start over
         </button>
@@ -212,14 +201,3 @@ function Ring({ endsAt, seconds }: { endsAt: string; seconds: number }) {
   );
 }
 
-/** Stands in for the live preview when the fake camera is in use. */
-function FakeViewfinder() {
-  return (
-    <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(ellipse_at_50%_35%,#3a2d3f_0%,#1a1320_55%,#0d0a0f_100%)]">
-      <div className="flex flex-col items-center gap-3 opacity-50">
-        <Camera className="h-20 w-20 text-ivory-faint" strokeWidth={1.1} />
-        <p className="eyebrow eyebrow-dim">Fake camera</p>
-      </div>
-    </div>
-  );
-}
