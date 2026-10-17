@@ -1,12 +1,17 @@
 import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import {
   ACTIVE_PHASES,
+  DEFAULT_PROP,
   beginSession,
   defaultFilter,
   newShortId,
   offeredFilters,
+  offeredProps,
+  parseFaces,
   transition,
+  type Face,
   type FilterId,
+  type PropId,
   type SessionEvent,
   type SessionState,
   type Transition,
@@ -39,6 +44,7 @@ export function rowToState(row: SessionRow): SessionState {
     print: row.print,
     reason: row.reason,
     filter: row.filter,
+    prop: row.prop,
     mirrored: row.mirrored,
   };
 }
@@ -53,6 +59,7 @@ function stateToColumns(state: SessionState) {
     print: state.print,
     reason: state.reason,
     filter: state.filter,
+    prop: state.prop,
     mirrored: state.mirrored,
     updatedAt: new Date(),
     ...(ACTIVE_PHASES.includes(state.phase) ? {} : { finishedAt: new Date() }),
@@ -68,12 +75,14 @@ export async function findActiveSession(dbOrTx: Db | Tx): Promise<SessionRow | n
 }
 
 /**
- * A guest tapped a layout. Refused while paused, while another session
- * is active, or for a layout that is not offered - all three are things
- * a second finger on the iPad can cause. The photos start in the booth's
- * default look; the guest picks another on the review screen.
+ * A guest tapped a layout, and the props they picked to pose in when
+ * the booth offers any. Refused while paused, while another session is
+ * active, or for a layout or props that are not offered - all things a
+ * second finger on the iPad, or an attendant changing Setup, can cause.
+ * The photos start in the booth's default look; the guest picks another
+ * on the review screen.
  */
-export async function startSession(templateId: string, now = new Date()): Promise<SessionRow> {
+export async function startSession(templateId: string, prop: PropId = DEFAULT_PROP, now = new Date()): Promise<SessionRow> {
   return db.transaction(async (tx) => {
     // Serialise starts: two taps must not both find "no active session".
     await tx.execute(sql`select pg_advisory_xact_lock(1)`);
@@ -84,6 +93,9 @@ export async function startSession(templateId: string, now = new Date()): Promis
     }
     const template = await tx.query.templates.findFirst({ where: eq(templates.id, templateId) });
     if (!template || !template.active) throw new SessionError("That layout is not offered right now", 400);
+    if (prop !== DEFAULT_PROP && !offeredProps(settings.props).includes(prop)) {
+      throw new SessionError("Those props are not offered right now", 400);
+    }
     const active = await findActiveSession(tx);
     if (active) throw new SessionError("Another session is in progress");
 
@@ -92,6 +104,7 @@ export async function startSession(templateId: string, now = new Date()): Promis
         shotCount: template.shotCount,
         countdownSeconds: settings.countdownSeconds,
         filter: defaultFilter(offeredFilters(settings.filters)),
+        prop,
       },
       now,
     );
@@ -188,9 +201,26 @@ export async function chooseFilter(id: string, filter: FilterId): Promise<Sessio
   return commandSession(id, { type: "filter_chosen", filter });
 }
 
+/** The guest picked other props on the review screen: no props, or ones the booth offers. */
+export async function chooseProp(id: string, prop: PropId): Promise<SessionRow> {
+  const settings = await readBooth(db);
+  if (prop !== DEFAULT_PROP && !offeredProps(settings.props).includes(prop)) {
+    throw new SessionError("Those props are not offered right now", 400);
+  }
+  return commandSession(id, { type: "prop_chosen", prop });
+}
+
 /** The guest flipped the photos on the review screen, or flipped them back. */
 export async function chooseMirror(id: string, mirrored: boolean): Promise<SessionRow> {
   return commandSession(id, { type: "mirror_chosen", mirrored });
+}
+
+/** What is known about a shot's frame besides the file: its size, upright, and the faces in it. */
+export interface ShotFrame {
+  width: number;
+  height: number;
+  /** Null when nobody looked for faces. */
+  faces: Face[] | null;
 }
 
 /**
@@ -199,7 +229,7 @@ export async function chooseMirror(id: string, mirrored: boolean): Promise<Sessi
  * from an attempt the session gave up on is removed instead, so it can
  * never stand in for the photo that replaced it.
  */
-export async function recordShot(id: string, shot: number, path: string): Promise<Transition & { row: SessionRow }> {
+export async function recordShot(id: string, shot: number, path: string, frame: ShotFrame): Promise<Transition & { row: SessionRow }> {
   let recorded = false;
   const result = await applyWith(id, { type: "shot_taken", shot }, new Date(), async (tx) => {
     recorded = true;
@@ -207,10 +237,11 @@ export async function recordShot(id: string, shot: number, path: string): Promis
       .select({ path: shots.path })
       .from(shots)
       .where(and(eq(shots.sessionId, id), eq(shots.shot, shot)));
+    const columns = { path, width: frame.width, height: frame.height, faces: frame.faces };
     await tx
       .insert(shots)
-      .values({ sessionId: id, shot, path })
-      .onConflictDoUpdate({ target: [shots.sessionId, shots.shot], set: { path, takenAt: new Date() } });
+      .values({ sessionId: id, shot, ...columns })
+      .onConflictDoUpdate({ target: [shots.sessionId, shots.shot], set: { ...columns, takenAt: new Date() } });
     return before && before.path !== path ? [before.path] : [];
   }).catch(async (err: unknown) => {
     await removeAll([path]);
@@ -229,13 +260,14 @@ export async function shotPath(id: string, shot: number): Promise<string | null>
   return row?.path ?? null;
 }
 
-/** A session's shots in order, as stored. */
-export async function listShots(id: string): Promise<{ shot: number; path: string }[]> {
-  return db
-    .select({ shot: shots.shot, path: shots.path })
+/** A session's shots in order, as stored, with the faces in each (null when nobody looked, or for a row that does not parse). */
+export async function listShots(id: string): Promise<{ shot: number; path: string; faces: Face[] | null }[]> {
+  const rows = await db
+    .select({ shot: shots.shot, path: shots.path, faces: shots.faces })
     .from(shots)
     .where(eq(shots.sessionId, id))
     .orderBy(asc(shots.shot));
+  return rows.map((r) => ({ ...r, faces: r.faces === null ? null : parseFaces(r.faces) }));
 }
 
 /**

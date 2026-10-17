@@ -1,15 +1,16 @@
 /**
  * The compositor: a session's photos laid into its layout, with the
- * look and the mirror the guest chose on the review screen, as three
- * JPEGs: the postcard for the printer, the web photo for the gallery and
- * the screens, and a thumbnail.
+ * props, the look and the mirror the guest chose, as three JPEGs: the
+ * postcard for the printer, the web photo for the gallery and the
+ * screens, and a thumbnail.
  *
  * The geometry and the colour arithmetic are in core (`placePhotos`,
- * `planOutputs`, `applyLook`) and tested there; this file is the sharp
- * that carries them out. Each shot is decoded once, upright and in sRGB,
- * and every slot it fills is cut from that: cropped like CSS
- * `object-fit: cover`, scaled to the slot, flopped if mirrored, and put
- * through the look, which is what `Composite` draws in the browser. The
+ * `planOutputs`, `applyLook`, `placeProp`) and tested there; this file
+ * is the sharp that carries them out. Each shot is decoded once, upright
+ * and in sRGB, and the props are drawn on its faces (`drawProps`); every
+ * slot it fills is cut from that: cropped like CSS `object-fit: cover`,
+ * scaled to the slot, flopped if mirrored, and put through the look,
+ * which is what `Composite` draws in the browser, props and all. The
  * photos go on white paper, the knocked-out overlay on top.
  */
 import { access } from "node:fs/promises";
@@ -26,6 +27,7 @@ import {
   setComposite,
   templatePaths,
 } from "@booth/db";
+import { drawProps } from "./props";
 
 const PAPER = { r: 255, g: 255, b: 255 };
 /** The printer gets the best the card can show; 4:4:4 keeps thin type in the design crisp. */
@@ -61,9 +63,11 @@ export async function composeSession(id: string): Promise<Composed> {
   });
 
   const frames = new Map<number, Frame>();
-  for (const { shot, path } of await listShots(id)) {
+  for (const { shot, path, faces } of await listShots(id)) {
     if (shot > session.shotCount) continue;
-    frames.set(shot, await decode(resolveData(path), shot));
+    const frame = await decode(resolveData(path), shot);
+    if (faces?.length) frame.data = await drawProps(frame.data, frame.size, faces, session.prop);
+    frames.set(shot, frame);
   }
   const placements = placePhotos(template, new Map([...frames].map(([shot, f]) => [shot, f.size])));
 

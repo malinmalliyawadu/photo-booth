@@ -8,6 +8,9 @@ node_modules
 
 # Next.js
 .next
+
+# MediaPipe's runtime, copied from node_modules by apps/booth/scripts/mediapipe.mjs
+/apps/booth/public/mediapipe/wasm
 out
 next-env.d.ts
 

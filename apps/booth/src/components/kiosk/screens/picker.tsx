@@ -4,16 +4,20 @@ import { X } from "lucide-react";
 import type { TemplateSummary } from "@booth/db";
 import { Grain, Spotlight } from "@/components/chrome";
 import { Composite, samplePhotos } from "@/components/composite";
+import { words } from "./props";
 
 /** Step one: the layouts on offer, each shown as the print it makes. */
 export function PickerScreen({
   templates,
+  step,
   busy,
   error,
   onPick,
   onBack,
 }: {
   templates: TemplateSummary[];
+  /** Which step this is, and of how many, for the eyebrow. */
+  step: { n: number; of: number };
   busy: boolean;
   error: string | null;
   onPick: (id: string) => void;
@@ -29,7 +33,9 @@ export function PickerScreen({
       <Grain />
       <header className="relative flex items-end justify-between">
         <div className="animate-rise">
-          <p className="eyebrow">Step one of three</p>
+          <p className="eyebrow">
+            Step {words(step.n)} of {words(step.of)}
+          </p>
           <h1 className="display mt-3 text-[clamp(2.75rem,6vw,4.5rem)]">Choose your layout</h1>
         </div>
         <button type="button" onClick={onBack} className="tap tap-ghost tap-sm" disabled={busy}>

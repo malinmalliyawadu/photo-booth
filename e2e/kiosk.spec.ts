@@ -47,7 +47,8 @@ test("a guest walks the booth from tap to QR", async ({ page, request }) => {
   await expect(page.getByTestId("filter-colour")).toHaveAttribute("aria-checked", "true");
   await page.getByTestId("filter-mono").click();
   await expect(page.getByTestId("filter-mono")).toHaveAttribute("aria-checked", "true");
-  const photo = page.getByTestId("review").locator(`img[src="${reviewed.session!.shots[0]!.url}"]`).first();
+  // The look and the mirror are on the photo as laid out in its slot, props and all.
+  const photo = page.getByTestId("review").locator(`[data-photo="${reviewed.session!.shots[0]!.url}"]`).first();
   const overlay = page.getByTestId("review").locator(`img[src="${layout!.screenUrl}"]`);
   await expect(photo).toHaveCSS("filter", MONO_CSS);
   await expect(overlay).toHaveCSS("filter", "none");

@@ -62,6 +62,7 @@ export function Slideshow({ initial }: { initial: Snapshot }) {
               photos={sessionPhotos(current.shots)}
               composed={current.webUrl}
               filter={current.filter}
+              prop={current.prop}
               mirrored={current.mirrored}
               fit
               mat
@@ -94,7 +95,12 @@ function Caption({ session, newest }: { session: Snapshot["recent"][number]; new
     <div className="flex items-center gap-4">
       {fresh && <span className="pill pill-gold animate-breathe text-sm">Just taken</span>}
       <p className="mono text-[clamp(0.9rem,1.4vw,1.2rem)] text-ivory-soft">
-        {sessionNumber(session.number)} <span className="text-ivory-faint">· {clockTime(session.createdAt)}</span>
+        {sessionNumber(session.number)} <span className="text-ivory-faint">
+          · {/* In the screen's own time zone, which the server (Coolify's is UTC) need not share. */}
+          <time dateTime={session.createdAt} suppressHydrationWarning>
+            {clockTime(session.createdAt)}
+          </time>
+        </span>
       </p>
     </div>
   );

@@ -12,7 +12,20 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
-import { FILTER_IDS, INK_CASSETTE_PRINTS, PAPER_TRAY_SHEETS, type CameraMode, type FilterId, type Phase, type PrintStatus, type Slot, type TextField } from "@booth/core";
+import {
+  FILTER_IDS,
+  INK_CASSETTE_PRINTS,
+  PAPER_TRAY_SHEETS,
+  PROP_IDS,
+  type CameraMode,
+  type Face,
+  type FilterId,
+  type Phase,
+  type PrintStatus,
+  type PropId,
+  type Slot,
+  type TextField,
+} from "@booth/core";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
@@ -40,6 +53,11 @@ export const booth = pgTable(
     lockedTemplateId: text("locked_template_id"),
     /** Which filters the kiosk offers; one means the step is skipped. */
     filters: jsonb("filters").$type<FilterId[]>().notNull().default([...FILTER_IDS]),
+    /** Which face props the kiosk offers before posing; none means the step is skipped. "No props" is always a choice. */
+    props: jsonb("props")
+      .$type<PropId[]>()
+      .notNull()
+      .default(PROP_IDS.filter((id) => id !== "none")),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (t) => [check("booth_singleton", sql`${t.id} = 1`)],
@@ -97,6 +115,8 @@ export const sessions = pgTable(
       .references(() => templates.id),
     /** The look the guest picked, applied wherever the photos are drawn. */
     filter: text("filter").$type<FilterId>().notNull().default("colour"),
+    /** What every face in the photos wears, drawn wherever the photos are; the files never wear it. */
+    prop: text("prop").$type<PropId>().notNull().default("none"),
     /** Drawn flipped, the way the mirror showed the guest; the files are never flipped. */
     mirrored: boolean("mirrored").notNull().default(false),
     phase: text("phase").$type<Phase>().notNull(),
@@ -134,6 +154,15 @@ export const shots = pgTable(
       .references(() => sessions.id, { onDelete: "cascade" }),
     shot: integer("shot").notNull(),
     path: text("path").notNull(),
+    /** The frame's size, upright. Null on shots from before it was recorded. */
+    width: integer("width"),
+    height: integer("height"),
+    /**
+     * The faces the kiosk found in the frame, which the props are drawn
+     * on. Null when nobody looked (a camera other than the iPad's, or a
+     * detector that would not load); an empty list when nobody was there.
+     */
+    faces: jsonb("faces").$type<Face[]>(),
     takenAt: timestamptz("taken_at").notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.sessionId, t.shot] })],

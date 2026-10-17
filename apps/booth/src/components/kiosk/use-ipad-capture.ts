@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import {
+  FACES_HEADER,
   beginTaking,
   frameTaken,
   planCapture,
@@ -9,7 +10,9 @@ import {
   sendFailed,
   type CaptureEpisode,
   type CaptureView,
+  type Face,
 } from "@booth/core";
+import type { FaceFinder } from "./face-finder";
 
 /**
  * How long the white screen lights the guests before the frame is read.
@@ -23,7 +26,8 @@ const FRAME_WAIT_MS = 2000;
 const SEND_RETRY_MS = 600;
 const MAX_SENDS = 4;
 
-type Frame = { blob: Blob } | { error: string };
+/** The photo and the faces in it (null when nobody could look), or why there is no photo. */
+type Frame = { blob: Blob; faces: Face[] | null } | { error: string };
 
 export interface Flash {
   state: "off" | "on" | "fading";
@@ -48,6 +52,7 @@ class CaptureController {
 
   constructor(
     private readonly video: () => HTMLVideoElement | null,
+    private readonly finder: () => FaceFinder | null,
     private readonly flash: (state: Flash["state"]) => void,
     private readonly error: (message: string | null) => void,
   ) {}
@@ -99,9 +104,11 @@ class CaptureController {
   private async take(taking: CaptureEpisode) {
     this.flash("on");
     let frame: Frame;
+    let canvas: HTMLCanvasElement | null = null;
     try {
       await sleep(FLASH_LEAD_MS);
-      frame = { blob: await grabFrame(await this.readyVideo()) };
+      canvas = drawFrame(await this.readyVideo());
+      frame = { blob: await encode(canvas), faces: null };
       this.error(null);
     } catch (err) {
       frame = { error: err instanceof Error ? err.message : String(err) };
@@ -109,6 +116,9 @@ class CaptureController {
     }
     if (this.disposed) return;
     this.flash("fading");
+    // The faces are looked for in the very frame that was taken, once
+    // the white screen is down, so the props sit where the guests were.
+    if ("blob" in frame && canvas) frame.faces = this.findFaces(canvas);
     const held = frameTaken(this.episode, taking);
     if (!held) return;
     this.episode = held;
@@ -124,7 +134,11 @@ class CaptureController {
     try {
       res =
         "blob" in frame
-          ? await fetch(url, { method: "PUT", headers: { "Content-Type": "image/jpeg" }, body: frame.blob })
+          ? await fetch(url, {
+              method: "PUT",
+              headers: { "Content-Type": "image/jpeg", ...(frame.faces ? { [FACES_HEADER]: JSON.stringify(frame.faces) } : {}) },
+              body: frame.blob,
+            })
           : await fetch(`${url}/failed`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -147,6 +161,18 @@ class CaptureController {
     this.step();
   }
 
+  /** The faces in a frame; null when the detector has not loaded or fails, which costs the props, never the photo. */
+  private findFaces(canvas: HTMLCanvasElement): Face[] | null {
+    const finder = this.finder();
+    if (!finder) return null;
+    try {
+      return finder.find(canvas, canvas.width, canvas.height);
+    } catch (err) {
+      console.warn("Face detection failed on the photo", err);
+      return null;
+    }
+  }
+
   /** The preview, once it has a picture. A screen that just opened mid-shot may need a moment. */
   private async readyVideo(): Promise<HTMLVideoElement> {
     const deadline = Date.now() + FRAME_WAIT_MS;
@@ -160,17 +186,21 @@ class CaptureController {
 }
 
 /**
- * The full camera frame as a JPEG. The preview is mirrored with CSS so
- * guests see themselves as in a mirror; the frame underneath is not, so
- * the photo reads the right way round as drawn.
+ * The full camera frame. The preview is mirrored with CSS so guests see
+ * themselves as in a mirror; the frame underneath is not, so the photo
+ * reads the right way round as drawn.
  */
-function grabFrame(video: HTMLVideoElement): Promise<Blob> {
+function drawFrame(video: HTMLVideoElement): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return Promise.reject(new Error("could not read the camera"));
+  if (!ctx) throw new Error("could not read the camera");
   ctx.drawImage(video, 0, 0);
+  return canvas;
+}
+
+function encode(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) =>
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("could not encode the photo"))), "image/jpeg", 0.92),
   );
@@ -182,21 +212,28 @@ function sleep(ms: number) {
 
 /**
  * Takes the photos in iPad mode. `view` is the active session as the
- * snapshot shows it; `video` is the preview the frame is read from.
+ * snapshot shows it; `video` is the preview the frame is read from;
+ * `finder` looks for the faces in each frame, for the props.
  */
 export function useIpadCapture(
   enabled: boolean,
   view: CaptureView | null,
   video: RefObject<HTMLVideoElement | null>,
+  finder: FaceFinder | null,
 ): { flash: Flash; error: string | null } {
   const [flash, setFlash] = useState<Flash>({ state: "off", count: 0 });
   const [error, setError] = useState<string | null>(null);
   const controller = useRef<CaptureController | null>(null);
+  const currentFinder = useRef(finder);
+  useEffect(() => {
+    currentFinder.current = finder;
+  }, [finder]);
 
   useEffect(() => {
     if (!enabled) return;
     const c = new CaptureController(
       () => video.current,
+      () => currentFinder.current,
       (state) => setFlash((f) => ({ state, count: state === "on" ? f.count + 1 : f.count })),
       setError,
     );

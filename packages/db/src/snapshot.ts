@@ -1,5 +1,16 @@
 import { desc, eq, inArray, isNull, and } from "drizzle-orm";
-import { offeredFilters, type CameraMode, type FilterId, type Phase, type PrintStatus, type Slot } from "@booth/core";
+import {
+  offeredFilters,
+  offeredProps,
+  parseFaces,
+  type CameraMode,
+  type Face,
+  type FilterId,
+  type Phase,
+  type PrintStatus,
+  type PropId,
+  type Slot,
+} from "@booth/core";
 import { db } from "./client";
 import { readBooth } from "./booth";
 import { queueCounts } from "./jobs";
@@ -31,6 +42,8 @@ export interface Snapshot {
     lockedTemplateId: string | null;
     /** The filters the kiosk offers, in the order it shows them. */
     filters: FilterId[];
+    /** The face props the kiosk offers before posing, in the order it shows them; empty skips the step. */
+    props: PropId[];
   };
   components: Record<ComponentName, { status: ComponentStatus; detail: string; seenAt: string } | undefined>;
   templates: TemplateSummary[];
@@ -62,6 +75,8 @@ export interface SessionView {
   number: number;
   templateId: string;
   filter: FilterId;
+  /** What every face in the photos wears. */
+  prop: PropId;
   /** The photos are drawn flipped, the way the mirror showed the guest. */
   mirrored: boolean;
   phase: Phase;
@@ -73,7 +88,7 @@ export interface SessionView {
   print: PrintStatus | null;
   reason: string | null;
   printCount: number;
-  shots: { shot: number; url: string }[];
+  shots: ShotView[];
   compositeUrl: string | null;
   webUrl: string | null;
   thumbUrl: string | null;
@@ -83,7 +98,37 @@ export interface SessionView {
   deleted: boolean;
 }
 
+export interface ShotView {
+  shot: number;
+  url: string;
+  /** The frame's size, upright; null on shots from before it was recorded. */
+  width: number | null;
+  height: number | null;
+  /**
+   * The faces the props are drawn on; null when nobody looked. Left out
+   * (null) for a session the compositor has made its JPEGs for, which
+   * every screen shows instead: forty sessions' faces in every snapshot
+   * would be weight nobody draws.
+   */
+  faces: Face[] | null;
+}
+
 export const RECENT_LIMIT = 40;
+
+type ShotRow = typeof shots.$inferSelect;
+
+function shotViews(rows: ShotRow[], session: typeof sessions.$inferSelect): ShotView[] {
+  const drawn = session.webPath === null;
+  return rows
+    .sort((a, b) => a.shot - b.shot)
+    .map((s) => ({
+      shot: s.shot,
+      url: mediaUrl(s.path)!,
+      width: s.width,
+      height: s.height,
+      faces: drawn && s.faces !== null ? parseFaces(s.faces) : null,
+    }));
+}
 
 export async function readSnapshot(): Promise<Snapshot> {
   const [settings, componentRows, templateRows, active, recentRows, queue] = await Promise.all([
@@ -101,17 +146,12 @@ export async function readSnapshot(): Promise<Snapshot> {
 
   const ids = [...(active ? [active.id] : []), ...recentRows.map((r) => r.id)];
   const shotRows = ids.length ? await db.select().from(shots).where(inArray(shots.sessionId, ids)) : [];
-  const shotsFor = (id: string) =>
-    shotRows
-      .filter((s) => s.sessionId === id)
-      .sort((a, b) => a.shot - b.shot)
-      .map((s) => ({ shot: s.shot, url: mediaUrl(s.path)! }));
-
   const view = (row: typeof sessions.$inferSelect): SessionView => ({
     id: row.id,
     number: row.number,
     templateId: row.templateId,
     filter: row.filter,
+    prop: row.prop,
     mirrored: row.mirrored,
     phase: row.phase,
     shot: row.shot,
@@ -122,7 +162,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     print: row.print,
     reason: row.reason,
     printCount: row.printCount,
-    shots: shotsFor(row.id),
+    shots: shotViews(shotRows.filter((s) => s.sessionId === row.id), row),
     compositeUrl: mediaUrl(row.compositePath),
     webUrl: mediaUrl(row.webPath),
     thumbUrl: mediaUrl(row.thumbPath),
@@ -151,6 +191,7 @@ export async function readSnapshot(): Promise<Snapshot> {
       inkCassetteSize: settings.inkCassetteSize,
       lockedTemplateId: settings.lockedTemplateId,
       filters: offeredFilters(settings.filters),
+      props: offeredProps(settings.props),
     },
     components: componentMap,
     templates: templateRows.map((t) => ({
@@ -184,6 +225,7 @@ export async function readSessionView(id: string): Promise<SessionView | null> {
     number: row.number,
     templateId: row.templateId,
     filter: row.filter,
+    prop: row.prop,
     mirrored: row.mirrored,
     phase: row.phase,
     shot: row.shot,
@@ -194,7 +236,7 @@ export async function readSessionView(id: string): Promise<SessionView | null> {
     print: row.print,
     reason: row.reason,
     printCount: row.printCount,
-    shots: shotRows.sort((a, b) => a.shot - b.shot).map((s) => ({ shot: s.shot, url: mediaUrl(s.path)! })),
+    shots: shotViews(shotRows, row),
     compositeUrl: mediaUrl(row.compositePath),
     webUrl: mediaUrl(row.webPath),
     thumbUrl: mediaUrl(row.thumbPath),

@@ -1,7 +1,8 @@
 # Photo booth
 
-A guest taps the iPad, picks a layout and a filter, poses through a
-countdown with one shot per photo slot, and gets a QR code to their
+A guest taps the iPad, picks a layout, tries on props (a crown, heart
+glasses) live, poses through a countdown with one shot per photo slot,
+picks a filter, and gets a QR code to their
 photos. One postcard print comes out for the guestbook. The booth has
 internet at the venue: the event's own site, where guests upload their
 phone photos too, fills with the booth's photos as sessions finish.
@@ -20,7 +21,7 @@ Vitest for pure modules, Playwright for the kiosk's happy path.
 | --- | --- | --- |
 | `apps/booth` | Next.js: kiosk (`/`), admin (`/admin`, `/admin/sessions`, `/admin/setup`), slideshow (`/slideshow`), the session API, the SSE stream, `/media` | The controller, or Coolify |
 | `packages/worker` | Node process: camera, compositor, the CUPS printer, the gallery sync, the jobs lanes | The controller, or Coolify |
-| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants and the paper and ink counts, the IPP codec and what the printer's states mean, the filter catalogue and its pixel arithmetic, the compositor's geometry, the `Camera` interface, the iPad capture plan and viewfinder crop, the gallery setting and sync plan | The app and the worker |
+| `packages/core` | Pure, tested: session state machine, short IDs, slot detection, print constants and the paper and ink counts, the IPP codec and what the printer's states mean, the filter catalogue and its pixel arithmetic, the faces a photo holds and the face props' catalogue, artwork and placement, the compositor's geometry, the `Camera` interface, the iPad capture plan and viewfinder crop, the gallery setting and sync plan | The app and the worker |
 | `packages/db` | Drizzle schema + migrations, the repositories, the data directory, the snapshot | The app and the worker |
 | `templates/` | Layout PNGs and optional JSON sidecars; the seed loads them | Uploaded through admin on the night |
 | `ops/` | `tailscale.sh` (the booth's HTTPS address on the tailnet), `printer.sh` (the SELPHY's CUPS queue: USB on Linux, AirPrint on a Mac), `ca.sh` (the private certificate authority for `pnpm dev`); systemd units and the soak test arrive in phase 6 | The controller |
@@ -41,6 +42,7 @@ finished session there and the QR links there; see **The gallery**.
 - `cp .env.example .env` then set `ADMIN_PASSWORD`
 - `pnpm db:migrate`, `pnpm db:seed` - the seed is idempotent and the worker runs it on start
 - `pnpm assets` - regenerates the placeholder templates and sample photos (sharp)
+- `pnpm --filter @booth/booth mediapipe` - copies MediaPipe's wasm runtime into `apps/booth/public/mediapipe/wasm` (gitignored); `dev` and `build` run it first
 - `pnpm icons` - rasterises `apps/booth/src/app/icon.svg` into the home-screen PNGs; commit them
 - `pnpm build`, then `pnpm start` - the booth for real: the built app and the worker on 127.0.0.1, which `tailscale serve` puts on the tailnet over HTTPS (`ops/tailscale.sh`, once per controller)
 - `pnpm dev` - booth app over **HTTPS on 3100** plus the worker; `pnpm --filter @booth/booth dev:http` for a browser that will not trust the private CA
@@ -67,7 +69,7 @@ finished session there and the QR links there; see **The gallery**.
 countdown ─(countdown_elapsed)─▶ capturing ─(shot_taken)─▶ countdown (next shot)
                                      │                 └─▶ review (last shot)
                                      └─(shot_failed)─▶ countdown (retry, 3 attempts) | failed
-review ─(filter_chosen | mirror_chosen)─▶ review
+review ─(filter_chosen | prop_chosen | mirror_chosen)─▶ review
        ├─(retake)─▶ countdown (shot 1)
        └─(accepted | timed_out)─▶ composing ─(composed)─▶ delivering ─(finished | timed_out)─▶ done
                                             └─(compose_failed | timed_out)─▶ failed
@@ -80,7 +82,9 @@ the print is pending, because a card takes most of a minute and the
 guest may have tapped Done long before it is out.
 
 The review comes before the compositor because the review is where the
-guest picks the look and the mirror; the JPEGs are made once, from what
+guest settles the look, the props and the mirror (the props are first
+picked before posing: `startSession` takes them, so the session begins
+wearing them); the JPEGs are made once, from what
 was accepted, and the print and the sync follow from `composed`.
 
 `transition(state, event, now)` returns the next state plus **effects**,
@@ -135,11 +139,55 @@ camera and the worker's capture job only logs that it is waiting.
   mirrored with CSS only, so the photo reads the other way round from
   what the guest posed in; a guest who wants it the way the mirror
   showed it flips it on the review screen (see **Filters**).
+- The faces are found in the frame that was taken, once the white
+  screen is down, by the same detector the live preview uses, and go
+  with the photo in the `x-booth-faces` header; the route stores them
+  on the shot with the frame's size (see **Props**). Faces that do not
+  parse are dropped, never the photo.
 
 **What guests see is what the layout keeps.** `viewfinderCrop`
 (`packages/core/src/viewfinder.ts`) crops the live preview, in every
 camera mode, to the centred cover crop of the slot(s) the shot fills,
 which is how `Composite` and the compositor (`placePhotos`) crop the photo.
+
+## Props (`packages/core/src/faces.ts`, `props.ts`, `prop-art.ts`)
+
+Face filters, as a photo booth's props: a crown, a flower crown, a top
+hat, heart glasses, gold specs, a moustache, worn by every face in the
+photos. They are a choice on the session like the look, never a change
+to the files:
+
+- **Finding the faces.** In iPad mode the kiosk runs MediaPipe's face
+  detector (`components/kiosk/face-finder.ts`) with the **full-range**
+  BlazeFace model, on a 640 px copy of the frame, on the CPU: about
+  10 ms. The runtime and the model are served by the booth itself
+  (`public/mediapipe`; the model is checked in, the runtime copied from
+  node_modules), so nothing is fetched from the internet. It runs live
+  (20 times a second, `trackFaces` smoothing and following each face)
+  while the props are on screen, and once on each photo taken, whose
+  faces are stored on the shot (`shots.faces`, positions as fractions of
+  the unmirrored frame, with `shots.width` and `height`). A shot nobody
+  looked at (another camera, a detector that would not load) has null
+  faces and no props. With no detector, the props step is skipped.
+- **Drawing them.** `placeProp` pins each prop's artwork to a point of
+  the face (the eyes, the nose, the mouth), offset along the face's own
+  axes, sized in face widths (the box, which does not shrink as a head
+  turns), turned with the eye line. The browser lays the whole frame out
+  behind each slot (`FramedPhoto`: the same centred cover crop) and
+  draws the SVG at those percentages (`PropLayer`); the compositor
+  rasterises the same SVG with sharp at the same place on the frame
+  (`packages/worker/src/props.ts`) before the frame is cut into slots,
+  flopped and put through the look. So a prop is cut off at a slot's
+  edge, mirrored and filtered exactly as on the screen. The artwork
+  keeps to what librsvg and Safari draw alike, and nothing in it reads
+  one way only.
+- **Choosing.** After the layout, a "Try on some props" step shows the
+  viewfinder with the props on live; the guests start the countdown in
+  the ones they like (`POST /api/sessions` with `prop`), pose in them,
+  and may change them on the review, where each swatch is the biggest
+  face in the first photo wearing that prop (`prop_chosen`, review
+  only). `booth.props` is which ones the attendant offers; none
+  offered skips the step and the review's tab.
 
 ## How a screen works
 
@@ -240,8 +288,8 @@ CSS filter functions as the Filter Effects spec defines them, in sRGB,
 clamped after every step and truncated to 8 bits, which is what
 Chromium does: the tests hold Chromium's own output for every look and
 the compositor lands within one level of it. The worker decodes each
-shot once (EXIF-rotated, sRGB), cuts each slot from it, flops it if
-mirrored, runs the look, lays the photos on white with the print-size
+shot once (EXIF-rotated, sRGB), draws the props on its faces (see
+**Props**), cuts each slot from it, flops it if mirrored, runs the look, lays the photos on white with the print-size
 overlay on top, and writes the three files under fresh names.
 
 The compose job runs only in `composing`; the queue retries a failure
@@ -401,6 +449,16 @@ the context. `booth.sounds` switches them off from Setup.
   `Composite` draws the photos with `scaleX(-1)` (the overlay stays),
   and the compositor flops them with sharp. Off by default: the
   true frame is what a DSLR gives, and text in the shot reads correctly.
+- **The face tracker is MediaPipe, not jeeliz.** jeelizFaceFilter was
+  the first choice and was tested on public-domain NASA portraits in
+  WebKit and Chromium: it tracks one close face well (with full 3D head
+  rotation) but finds nothing smaller than about 13% of the frame's
+  width, however its scan is set, so of a three- or seven-person group
+  it found none. Guests stand a metre or two from an ultra-wide front
+  camera, where a face is 5 to 10% of the frame. MediaPipe's full-range
+  BlazeFace found all three and all seven. It gives a box and six points
+  (eyes, nose, mouth, ears) rather than a 3D pose, which is what flat
+  props need; there is no 3D head turn.
 
 ## Phases
 
@@ -410,7 +468,7 @@ the context. `booth.sounds` switches them off from Setup.
 4. **Printing** - built, not yet run on the printer: the SELPHY CP1300 over USB through CUPS and Gutenprint, the paper and ink counts (see **The printer is CUPS over IPP**). Left for the hardware: run `ops/printer.sh` and `pnpm print:test` on the controller, set `SAFE_MARGIN_MM` from the card, and confirm the printer's out-of-paper and jam reports reach the admin card; on a Mac, by AirPrint, also that the card comes out borderless and the right way round.
 5. **Gallery and QR** - done, ahead of order, as the push to the event's site (see **The gallery**) and the wedding-planner's `/api/booth/photos` and `/i/booth/{id}`.
 6. **Hardening** - systemd, a watchdog, recovery after a power cut, the 4-hour soak test.
-7. **Polish** - in progress: the gilded-darkroom redesign of the kiosk, the admin page and the TV (see **The look**), the sounds and the retake button are done; left: final artwork, whatever the hallway tests turn up.
+7. **Polish** - in progress: the gilded-darkroom redesign of the kiosk, the admin page and the TV (see **The look**), the sounds, the retake button and the face props are done; left: final artwork, whatever the hallway tests turn up.
 
 Phase 4 is the gated one (and 3, for a DSLR) and needs the hardware in the room by
 the end of October 2026. The full dress rehearsal is in February 2027.

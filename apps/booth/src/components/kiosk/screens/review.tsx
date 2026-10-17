@@ -1,27 +1,45 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
-import { Check, FlipHorizontal2, Printer, RotateCcw, X } from "lucide-react";
-import { cssFilter, filterById, needsFilterChoice, type FilterId } from "@booth/core";
-import type { SessionView, TemplateSummary } from "@booth/db";
+import { FlipHorizontal2, Printer, RotateCcw, X } from "lucide-react";
+import {
+  cssFilter,
+  faceCrop,
+  filterById,
+  needsFilterChoice,
+  needsPropChoice,
+  propById,
+  propChoices,
+  type Face,
+  type FilterId,
+  type PropId,
+} from "@booth/core";
+import type { SessionView, ShotView, TemplateSummary } from "@booth/db";
 import { Grain, Spotlight } from "@/components/chrome";
-import { Composite, MIRROR_TRANSFORM, sessionPhotos } from "@/components/composite";
+import { Composite, CoveredPhoto, FramedPhoto, sessionPhotos } from "@/components/composite";
+import { Choice, PropSwatch, PropTile, SWATCH, TILE } from "../choice";
 import type { Sounds } from "../sounds";
+import { words } from "./props";
 
 /**
- * The photos, through the filter the guest picks here, flipped if they
- * want them the way the mirror showed them. A tap shows at once on the
- * print and goes to the booth; the snapshot confirms it a moment later.
- * The swatches are the first photo through each look, so the comparison
- * is on the guest's own face, not a sample.
+ * The photos, through the look and the props the guest picks here,
+ * flipped if they want them the way the mirror showed them. A tap shows
+ * at once on the print and goes to the booth; the snapshot confirms it
+ * a moment later. The swatches are the first photo through each look,
+ * and a close-up of the biggest face in it wearing each prop, so the
+ * comparison is on the guest's own face, not a sample. With both to
+ * choose from, the card switches between them; the mirror is always at
+ * its foot.
  */
 export function ReviewScreen({
   session,
   template,
   filters,
+  props,
+  step,
   sounds,
   onFilter,
+  onProp,
   onMirror,
   onAccept,
   onRetake,
@@ -30,10 +48,15 @@ export function ReviewScreen({
 }: {
   session: SessionView;
   template: TemplateSummary;
-  /** What the booth offers; with one there is nothing to ask. */
+  /** The looks the booth offers; with one there is nothing to ask. */
   filters: FilterId[];
+  /** The props the booth offers; asked only when the photos have faces to wear them. */
+  props: PropId[];
+  /** Which step this is, and of how many, when there is something to choose. */
+  step: { n: number; of: number };
   sounds: Sounds;
   onFilter: (id: FilterId) => void;
+  onProp: (id: PropId) => void;
   onMirror: (mirrored: boolean) => void;
   onAccept: () => void;
   onRetake: () => void;
@@ -43,20 +66,34 @@ export function ReviewScreen({
   const [chosen, setChosen] = useState<FilterId | null>(null);
   if (chosen !== null && chosen === session.filter) setChosen(null);
   const filter = chosen ?? session.filter;
+  const [worn, setWorn] = useState<PropId | null>(null);
+  if (worn !== null && worn === session.prop) setWorn(null);
+  const prop = worn ?? session.prop;
   const [flipped, setFlipped] = useState<boolean | null>(null);
   if (flipped !== null && flipped === session.mirrored) setFlipped(null);
   const mirrored = flipped ?? session.mirrored;
-  const sample = session.shots[0]?.url;
-  const asking = needsFilterChoice(filters);
+  const sample = session.shots[0];
+  const askingLook = needsFilterChoice(filters);
+  const askingProps = needsPropChoice(props) && session.shots.some((s) => s.faces?.length);
+  const asking = askingLook || askingProps;
+  const [tab, setTab] = useState<"look" | "props">(askingLook ? "look" : "props");
+  const showing = askingLook && askingProps ? tab : askingLook ? "look" : "props";
+  const look = cssFilter(filter);
   // The photos are in: a chime as the review opens.
   useEffect(() => sounds.chime(), [sounds]);
   return (
-    <div className="relative flex h-dvh flex-col overflow-hidden px-12 pt-safe-8 pb-safe-8" data-testid="review" data-filter={filter} data-mirrored={mirrored}>
+    <div
+      className="relative flex h-dvh flex-col overflow-hidden px-12 pt-safe-8 pb-safe-8"
+      data-testid="review"
+      data-filter={filter}
+      data-prop={prop}
+      data-mirrored={mirrored}
+    >
       <Spotlight />
       <Grain />
       <header className="relative flex items-end justify-between">
         <div className="animate-rise">
-          <p className="eyebrow">{asking ? "Step three of three" : "Looking good"}</p>
+          <p className="eyebrow">{asking ? `Step ${words(step.n)} of ${words(step.of)}` : "Looking good"}</p>
           <h1 className="display mt-3 text-[clamp(2.75rem,6vw,4.5rem)]">{asking ? "Choose your look" : "Here's your photo"}</h1>
         </div>
         <button type="button" onClick={onCancel} className="tap tap-ghost tap-sm" disabled={busy}>
@@ -66,28 +103,67 @@ export function ReviewScreen({
 
       <div className="relative my-6 grid min-h-0 flex-1 grid-cols-[1.4fr_1fr] gap-10">
         <div className="min-h-0 animate-rise">
-          <Composite template={template} photos={sessionPhotos(session.shots)} filter={filter} mirrored={mirrored} fit mat />
+          <Composite template={template} photos={sessionPhotos(session.shots)} filter={filter} prop={prop} mirrored={mirrored} fit mat />
         </div>
-        <div className="card flex min-h-0 animate-rise flex-col overflow-y-auto p-3" style={{ animationDelay: "120ms" }}>
-          {asking && (
-            <div role="radiogroup" aria-label="Filter" data-testid="filters" className="flex flex-col gap-1">
-              {filters.map((id) => (
-                <Choice
-                  key={id}
-                  role="radio"
-                  selected={filter === id}
-                  label={filterById(id).name}
-                  testId={`filter-${id}`}
-                  onClick={() => {
-                    setChosen(id);
-                    onFilter(id);
-                  }}
+        <div className="card flex min-h-0 animate-rise flex-col p-3" style={{ animationDelay: "120ms" }}>
+          {askingLook && askingProps && (
+            <div role="tablist" aria-label="Choose" className="mb-2 grid shrink-0 grid-cols-2 gap-1 rounded-xl bg-velvet p-1">
+              {(["look", "props"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="tab"
+                  aria-selected={showing === t}
+                  onClick={() => setTab(t)}
+                  data-testid={`tab-${t}`}
+                  className={`rounded-lg py-2.5 text-lg font-semibold transition-colors ${
+                    showing === t ? "bg-gold-tint text-ivory shadow-[inset_0_0_0_1px_var(--color-gold)]" : "text-ivory-faint"
+                  }`}
                 >
-                  {sample && <img src={sample} alt="" className="h-full w-full object-cover" style={{ filter: cssFilter(id) }} draggable={false} />}
-                </Choice>
+                  {t === "look" ? "Look" : "Props"}
+                </button>
               ))}
             </div>
           )}
+          <div className="flex min-h-0 flex-col overflow-y-auto">
+            {askingLook && showing === "look" && (
+              <div role="radiogroup" aria-label="Filter" data-testid="filters" className="flex flex-col gap-1">
+                {filters.map((id) => (
+                  <Choice
+                    key={id}
+                    role="radio"
+                    selected={filter === id}
+                    label={filterById(id).name}
+                    testId={`filter-${id}`}
+                    onClick={() => {
+                      setChosen(id);
+                      onFilter(id);
+                    }}
+                  >
+                    {sample && <CoveredPhoto photo={sample} box={SWATCH} look={cssFilter(id)} prop={prop} mirrored={false} />}
+                  </Choice>
+                ))}
+              </div>
+            )}
+            {askingProps && showing === "props" && (
+              <div role="radiogroup" aria-label="Props" data-testid="props-choices" className="grid grid-cols-4 gap-1">
+                {propChoices(props).map((id) => (
+                  <PropTile
+                    key={id}
+                    selected={prop === id}
+                    label={propById(id).name}
+                    testId={`prop-${id}`}
+                    onClick={() => {
+                      setWorn(id);
+                      onProp(id);
+                    }}
+                  >
+                    <FaceSwatch shot={sample} prop={id} look={look} />
+                  </PropTile>
+                ))}
+              </div>
+            )}
+          </div>
           {asking && <div className="hairline mx-4 mt-auto mb-2 shrink-0 pt-2" aria-hidden />}
           {/* The photo the way the mirror showed it: the swatch is the first shot flipped, in the chosen look. */}
           <Choice
@@ -102,9 +178,7 @@ export function ReviewScreen({
               onMirror(!mirrored);
             }}
           >
-            {sample && (
-              <img src={sample} alt="" className="h-full w-full object-cover" style={{ filter: cssFilter(filter), transform: MIRROR_TRANSFORM }} draggable={false} />
-            )}
+            {sample && <CoveredPhoto photo={sample} box={SWATCH} look={look} prop={prop} mirrored />}
           </Choice>
         </div>
       </div>
@@ -122,60 +196,20 @@ export function ReviewScreen({
 }
 
 /**
- * One choice on the review screen: a swatch of the guest's own first
- * photo the way this option would show it, with its name beside it,
- * and a check (a radio) or a switch at the end of the row.
+ * A prop on the biggest face in a photo, close up; the artwork alone
+ * when the photo has no face to put it on.
  */
-function Choice({
-  role,
-  selected,
-  label,
-  hint,
-  icon,
-  testId,
-  onClick,
-  children,
-}: {
-  role: "radio" | "switch";
-  selected: boolean;
-  label: string;
-  hint?: string;
-  icon?: React.ReactNode;
-  testId: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+function FaceSwatch({ shot, prop, look }: { shot: ShotView | undefined; prop: PropId; look: string }) {
+  const face = shot?.faces?.reduce<Face | null>((big, f) => (!big || f.box.width > big.box.width ? f : big), null);
+  if (!shot?.width || !shot.height || !face) return <PropSwatch prop={prop} />;
+  const frame = { width: shot.width, height: shot.height };
   return (
-    <button
-      type="button"
-      role={role}
-      aria-checked={selected}
-      onClick={onClick}
-      data-testid={testId}
-      className={`flex min-h-[4.6rem] w-full shrink-0 items-center gap-4 rounded-xl px-3 py-2 text-left transition-[background,transform] duration-150 active:scale-[0.985] ${
-        selected ? "bg-gold-tint shadow-[inset_0_0_0_1px_var(--color-gold)]" : "active:bg-velvet-lifted"
-      }`}
-    >
-      <div className="h-14 w-[4.75rem] shrink-0 overflow-hidden rounded-md bg-velvet-lifted shadow-[0_8px_20px_-8px_rgba(0,0,0,0.8)]">{children}</div>
-      <span className="min-w-0 flex-1">
-        <span className={`flex items-center gap-2 text-xl font-semibold ${selected ? "text-ivory" : "text-ivory-soft"}`}>
-          {icon}
-          {label}
-        </span>
-        {hint && <span className="mt-0.5 block text-sm text-ivory-faint">{hint}</span>}
-      </span>
-      {role === "radio" ? (
-        <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
-            selected ? "bg-gold text-velvet" : "ring-1 ring-ivory/30"
-          }`}
-          aria-hidden
-        >
-          {selected && <Check className="h-5 w-5" strokeWidth={3} />}
-        </span>
-      ) : (
-        <span className="switch" aria-checked={selected} aria-hidden />
-      )}
-    </button>
+    <FramedPhoto
+      photo={{ ...shot, ...frame }}
+      crop={faceCrop(face, frame, TILE.width / TILE.height)}
+      look={look}
+      prop={prop}
+      mirrored={false}
+    />
   );
 }

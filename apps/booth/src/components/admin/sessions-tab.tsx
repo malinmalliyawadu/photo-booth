@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera, Printer, Trash2, UploadCloud } from "lucide-react";
-import { filterById } from "@booth/core";
+import { filterById, propById } from "@booth/core";
 import type { SessionView, TemplateSummary } from "@booth/db";
 import { Composite, sessionPhotos } from "@/components/composite";
 import { post } from "@/components/use-snapshot";
@@ -45,7 +45,7 @@ function SessionRow({
       data-testid={`session-${s.id}`}
     >
       {template && s.shots.length > 0 ? (
-        <Composite template={template} photos={sessionPhotos(s.shots)} composed={s.thumbUrl} filter={s.filter} mirrored={s.mirrored} className="w-24 shrink-0 self-start rounded-sm" />
+        <Composite template={template} photos={sessionPhotos(s.shots)} composed={s.thumbUrl} filter={s.filter} prop={s.prop} mirrored={s.mirrored} className="w-24 shrink-0 self-start rounded-sm" />
       ) : (
         <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-sm bg-velvet text-ivory-faint">
           <Camera className="h-5 w-5" />
@@ -54,13 +54,17 @@ function SessionRow({
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="display text-xl">{sessionNumber(s.number)}</span>
-          <span className="mono text-xs text-ivory-faint">{clockTime(s.createdAt)}</span>
+          {/* In the browser's own time zone, which the server (Coolify's is UTC) need not share. */}
+          <time dateTime={s.createdAt} className="mono text-xs text-ivory-faint" suppressHydrationWarning>
+            {clockTime(s.createdAt)}
+          </time>
           <span className={`pill pill-${tone}`}>{live ? "Live" : PHASE_LABEL[s.phase]}</span>
         </p>
         <p className="mt-0.5 text-xs text-ivory-soft">
           {[
             template?.name ?? "Unknown layout",
             s.filter !== "colour" ? filterById(s.filter).name.toLowerCase() : null,
+            s.prop !== "none" ? propById(s.prop).name.toLowerCase() : null,
             s.mirrored ? "mirrored" : null,
             s.print ? PRINT_LABEL[s.print].toLowerCase() : null,
             s.printCount > 1 ? `${s.printCount} prints` : null,

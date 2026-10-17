@@ -357,6 +357,34 @@ describe("filter_chosen", () => {
   });
 });
 
+describe("prop_chosen", () => {
+  it("starts with no props unless the guest picked some before posing", () => {
+    expect(start().state.prop).toBe("none");
+    expect(beginSession({ shotCount: 1, countdownSeconds: 5, prop: "crown" }, T0).state.prop).toBe("crown");
+  });
+
+  it("changes the props on the review screen, as often as the guest likes, with nothing to do", () => {
+    const once = step(reviewing(), { type: "prop_chosen", prop: "hearts" });
+    expect(once.state.prop).toBe("hearts");
+    expect(once.state.phase).toBe("review");
+    expect(once.effects).toEqual([]);
+    expect(step(once.state, { type: "prop_chosen", prop: "none" }).state.prop).toBe("none");
+  });
+
+  it("is refused anywhere else: the guests pose through what they picked", () => {
+    const { state } = start();
+    expect(transition(state, { type: "prop_chosen", prop: "crown" }, T0)).toMatchObject({ ok: false });
+    const composing = step(reviewing(), { type: "accepted" }).state;
+    expect(transition(composing, { type: "prop_chosen", prop: "crown" }, T0)).toMatchObject({ ok: false });
+  });
+
+  it("survives a retake and the rest of the session", () => {
+    const chosen = step(reviewing(), { type: "prop_chosen", prop: "tophat" }).state;
+    expect(step(chosen, { type: "retake" }).state.prop).toBe("tophat");
+    expect(step(chosen, { type: "accepted" }).state.prop).toBe("tophat");
+  });
+});
+
 describe("mirror_chosen", () => {
   it("starts the right way round", () => {
     expect(start().state.mirrored).toBe(false);

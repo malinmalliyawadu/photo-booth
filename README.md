@@ -1,6 +1,6 @@
 # Photo booth
 
-Tap the iPad, pick a layout and a filter, pose, print, scan. Runs on a
+Tap the iPad, pick a layout, try on props, pose, pick a filter, print, scan. Runs on a
 mini PC or a Mac at the venue, or on Coolify; the photos go to the
 event's own site, where guests' phone photos land too.
 
@@ -83,6 +83,17 @@ black & white, vintage, faded or pop. The photos on disk stay as the
 camera took them; the look is applied where they are drawn and baked
 into the print and the gallery photo. Choose which filters to offer on
 `/admin`; with only one, nothing is asked.
+
+## Props
+
+With the iPad camera, guests try on props after picking a layout: a
+crown, flowers, a top hat, heart glasses, gold specs or a moustache,
+worn by every face in the viewfinder, live. They pose in them and can
+change them on the review screen; the print and the gallery photo have
+them drawn in the same places. The photos on disk stay as the camera
+took them. Choose which props to offer under Setup on `/admin`; with
+none on, the step is skipped. The face detector (MediaPipe) runs on the
+iPad from files the booth serves, so it needs no internet.
 
 ## The gallery
 
