@@ -152,9 +152,10 @@ which is how `Composite` and the compositor (`placePhotos`) crop the photo.
 
 ## Props (`packages/core/src/faces.ts`, `props.ts`, `prop-art.ts`)
 
-Face filters, as a photo booth's props: a crown, a flower crown, a top
-hat, heart glasses, gold specs, a moustache, worn by every face in the
-photos. They are a choice on the session like the look, never a change
+Face filters, as a photo booth's props: a crown, a tiara, a flower
+crown, a halo, a top hat, a party hat, bunny ears, heart glasses, gold
+specs, a masquerade mask, a moustache and a bow tie, worn by every face
+in the photos. They are a choice on the session like the look, never a change
 to the files:
 
 - **Finding the faces.** In iPad mode the kiosk runs MediaPipe's face
@@ -172,15 +173,25 @@ to the files:
 - **Drawing them.** `placeProp` pins each prop's artwork to a point of
   the face (the eyes, the nose, the mouth), offset along the face's own
   axes, sized in face widths (the box, which does not shrink as a head
-  turns), turned with the eye line. The browser lays the whole frame out
+  turns), turned with the eye line. The fits were tuned on the crew
+  portrait (`e2e/fixtures/crew.jpg`: short hair, long hair and a bald
+  head), a close-up of one face and the group tilted 15°, so a hat's
+  brim sits in the hair, the halo floats clear of it and the bow tie
+  lands at the collar. The browser lays the whole frame out
   behind each slot (`FramedPhoto`: the same centred cover crop) and
   draws the SVG at those percentages (`PropLayer`); the compositor
   rasterises the same SVG with sharp at the same place on the frame
   (`packages/worker/src/props.ts`) before the frame is cut into slots,
   flopped and put through the look. So a prop is cut off at a slot's
   edge, mirrored and filtered exactly as on the screen. The artwork
-  keeps to what librsvg and Safari draw alike, and nothing in it reads
-  one way only.
+  keeps to what librsvg and Safari draw alike (paths, circles, ellipses,
+  gradients and `<use>`; no text, filters, masks or clip paths), nothing
+  in it reads one way only, and it is drawn to read at 60 px, which is a
+  face in a group print: bold silhouettes, a dark edge, no detail finer
+  than 2% of the artwork. New props: art in `prop-art.ts`, an entry in
+  `PROPS` (which gives the booth row's default, so `pnpm db:generate`),
+  the id in `e2e/helpers.ts`; existing booths keep their stored list and
+  the attendant turns new ones on in Setup.
 - **Choosing.** After the layout, a "Try on some props" step shows the
   viewfinder with the props on live; the guests start the countdown in
   the ones they like (`POST /api/sessions` with `prop`), pose in them,

@@ -1,0 +1,1 @@
+ALTER TABLE "booth" ALTER COLUMN "props" SET DEFAULT '["crown","tiara","flowers","halo","tophat","partyhat","bunny","hearts","specs","mask","moustache","bowtie"]'::jsonb;
