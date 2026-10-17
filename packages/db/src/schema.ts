@@ -12,7 +12,7 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
-import { FILTER_IDS, INK_CASSETTE_PRINTS, PAPER_TRAY_SHEETS, type CameraMode, type FilterId, type Phase, type PrintStatus, type Slot, type TextField } from "@booth/core";
+import { FILTER_IDS, GUEST_COPY_LIMIT_DEFAULT, INK_CASSETTE_PRINTS, PAPER_TRAY_SHEETS, type CameraMode, type FilterId, type Phase, type PrintStatus, type Slot, type TextField } from "@booth/core";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
@@ -40,6 +40,8 @@ export const booth = pgTable(
     lockedTemplateId: text("locked_template_id"),
     /** Which filters the kiosk offers; one means the step is skipped. */
     filters: jsonb("filters").$type<FilterId[]>().notNull().default([...FILTER_IDS]),
+    /** Copies a guest may print of each session from the kiosk; 0 switches the button off. */
+    guestCopyLimit: integer("guest_copy_limit").notNull().default(GUEST_COPY_LIMIT_DEFAULT),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (t) => [check("booth_singleton", sql`${t.id} = 1`)],
@@ -116,6 +118,8 @@ export const sessions = pgTable(
     webPath: text("web_path"),
     thumbPath: text("thumb_path"),
     printCount: integer("print_count").notNull().default(0),
+    /** Copies guests asked for at the kiosk, counted against `booth.guestCopyLimit`; the attendant's reprints are not. */
+    guestCopies: integer("guest_copies").notNull().default(0),
     syncedAt: timestamptz("synced_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),

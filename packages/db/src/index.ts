@@ -1,5 +1,6 @@
 export * from "./booth";
 export * from "./client";
+export * from "./copies";
 export * from "./jobs";
 export * from "./notify";
 export * from "./schema";
