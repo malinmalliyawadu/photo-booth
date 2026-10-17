@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { FILTER_IDS, PROP_IDS, offeredFilters, offeredProps } from "@booth/core";
+import { FILTER_IDS, GUEST_COPY_LIMIT_MAX, PROP_IDS, offeredFilters, offeredProps } from "@booth/core";
 import { updateBooth } from "@booth/db";
 import { errorResponse, readJson } from "@/lib/api";
 
@@ -20,11 +20,12 @@ const Patch = z
     filters: z.array(z.enum(FILTER_IDS)).min(1, "Offer at least one filter").transform(offeredFilters),
     // Catalogue order, no duplicates; "no props" is always a choice, so it is never stored.
     props: z.array(z.enum(PROP_IDS)).transform(offeredProps),
+    guestCopyLimit: z.number().int().min(0).max(GUEST_COPY_LIMIT_MAX),
   })
   .partial()
   .strict();
 
-/** The attendant's knobs: pause, camera, countdown, sounds, paper and ink, locked layout, filters, props, event name. */
+/** The attendant's knobs: pause, camera, countdown, sounds, paper and ink, locked layout, filters, props, guests' copies, event name. */
 export async function PATCH(request: Request) {
   try {
     const parsed = Patch.safeParse(await readJson(request));

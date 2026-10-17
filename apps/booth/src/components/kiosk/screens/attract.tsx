@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera } from "lucide-react";
+import { Camera, Printer } from "lucide-react";
 import type { SessionView, TemplateSummary } from "@booth/db";
 import { Aperture, Frame, Grain, Spotlight } from "@/components/chrome";
 import { Composite, MIRROR_TRANSFORM, sessionPhotos } from "@/components/composite";
@@ -11,7 +11,9 @@ import { Composite, MIRROR_TRANSFORM, sessionPhotos } from "@/components/composi
  * mirror and the words sit along the bottom, clear of the faces in it:
  * a mirror pulls people in better than other people's photos. Without
  * one, the evening's prints drift past on a wall; before the first
- * print, a lamp and the names.
+ * print, a lamp and the names. The whole screen begins a session; the
+ * one button apart, at the top, is "Print a copy", while the attendant
+ * offers copies and there is a print to copy.
  */
 export function AttractScreen({
   eventName,
@@ -19,6 +21,7 @@ export function AttractScreen({
   templates,
   stream,
   onTap,
+  onCopies,
 }: {
   eventName: string;
   recent: SessionView[];
@@ -26,43 +29,53 @@ export function AttractScreen({
   /** The iPad's front camera when it is live: guests see themselves and come over. */
   stream: MediaStream | null;
   onTap: () => void;
+  onCopies?: (() => void) | undefined;
 }) {
   const prints = recent.filter((s) => s.takenCount === s.shotCount && s.shots.length > 0).slice(0, 12);
   const background = stream ? "camera" : prints.length > 0 ? "photos" : "lamp";
   return (
-    <button
-      type="button"
-      onClick={onTap}
-      data-testid="attract"
-      data-background={background === "lamp" ? "photos" : background}
-      className="relative flex h-dvh w-full flex-col justify-end overflow-hidden bg-velvet text-left"
-    >
-      {stream ? <Mirror stream={stream} /> : prints.length > 0 ? <Wall prints={prints} templates={templates} /> : <Lamp />}
-      <div
-        className={`absolute inset-0 ${
-          stream
-            ? "bg-[linear-gradient(to_bottom,rgba(13,10,15,0.45)_0%,rgba(13,10,15,0)_22%,rgba(13,10,15,0)_45%,rgba(13,10,15,0.85)_70%,rgba(13,10,15,0.97)_100%)]"
-            : "bg-[linear-gradient(to_bottom,rgba(13,10,15,0.2)_0%,rgba(13,10,15,0)_30%,rgba(13,10,15,0.9)_72%,rgba(13,10,15,1)_100%)]"
-        }`}
-        aria-hidden
-      />
-      <Grain />
-      <Frame inset="inset-5" />
+    <div className="relative h-dvh w-full overflow-hidden bg-velvet">
+      <button
+        type="button"
+        onClick={onTap}
+        data-testid="attract"
+        data-background={background === "lamp" ? "photos" : background}
+        className="absolute inset-0 flex flex-col justify-end text-left"
+      >
+        {stream ? <Mirror stream={stream} /> : prints.length > 0 ? <Wall prints={prints} templates={templates} /> : <Lamp />}
+        <div
+          className={`absolute inset-0 ${
+            stream
+              ? "bg-[linear-gradient(to_bottom,rgba(13,10,15,0.45)_0%,rgba(13,10,15,0)_22%,rgba(13,10,15,0)_45%,rgba(13,10,15,0.85)_70%,rgba(13,10,15,0.97)_100%)]"
+              : "bg-[linear-gradient(to_bottom,rgba(13,10,15,0.2)_0%,rgba(13,10,15,0)_30%,rgba(13,10,15,0.9)_72%,rgba(13,10,15,1)_100%)]"
+          }`}
+          aria-hidden
+        />
+        <Grain />
+        <Frame inset="inset-5" />
 
-      <div className="relative flex animate-rise items-end justify-between gap-10 px-14 pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
-        <div className="min-w-0">
-          <p className="eyebrow">Photo booth</p>
-          <h1 className="display-italic mt-3 max-w-[11ch] text-[clamp(4.5rem,9.5vw,8.5rem)] text-ivory">{eventName}</h1>
+        <div className="relative flex animate-rise items-end justify-between gap-10 px-14 pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
+          <div className="min-w-0">
+            <p className="eyebrow">Photo booth</p>
+            <h1 className="display-italic mt-3 max-w-[11ch] text-[clamp(4.5rem,9.5vw,8.5rem)] text-ivory">{eventName}</h1>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-5 pb-2">
+            <p className="eyebrow eyebrow-dim">Tap anywhere</p>
+            <span className="tap animate-glow">
+              <Camera className="h-8 w-8" strokeWidth={2.2} />
+              Begin
+            </span>
+          </div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-5 pb-2">
-          <p className="eyebrow eyebrow-dim">Tap anywhere</p>
-          <span className="tap animate-glow">
-            <Camera className="h-8 w-8" strokeWidth={2.2} />
-            Begin
-          </span>
+      </button>
+      {onCopies && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-end px-14 pt-safe-12">
+          <button type="button" onClick={onCopies} className="tap tap-ghost tap-sm pointer-events-auto animate-rise" data-testid="copies-open">
+            <Printer className="h-6 w-6" /> Print a copy
+          </button>
         </div>
-      </div>
-    </button>
+      )}
+    </div>
   );
 }
 

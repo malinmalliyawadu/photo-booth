@@ -4,14 +4,14 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Lock, Trash2, Upload, Volume2, VolumeX } from "lucide-react";
-import { FILTERS, PROPS, cssFilter, propImageUrl, type CameraMode, type FilterId, type PropId } from "@booth/core";
+import { FILTERS, GUEST_COPY_LIMIT_MAX, PROPS, cssFilter, propImageUrl, type CameraMode, type FilterId, type PropId } from "@booth/core";
 import type { TemplateRow } from "@booth/db";
 import { Composite, samplePhotos } from "@/components/composite";
 import { patch } from "@/components/use-snapshot";
 import { Row, Section, Segmented, Stepper } from "./controls";
 import { useAdmin } from "./shell";
 
-/** Set once for the evening: the event, the camera, the countdown, the layouts, and the looks and props on offer. */
+/** Set once for the evening: the event, the camera, the countdown, the copies, the layouts, and the looks and props on offer. */
 export function SetupTab() {
   const { snapshot, setBooth, run, notify } = useAdmin();
   const { booth, templates } = snapshot;
@@ -48,6 +48,14 @@ export function SetupTab() {
             {booth.sounds ? <Volume2 className="h-4 w-4 text-ivory-faint" /> : <VolumeX className="h-4 w-4 text-ivory-faint" />}
             {booth.sounds ? "On" : "Off"}
           </button>
+        </Row>
+        <Row label="Copies" hint="per print, at the kiosk">
+          <Segmented<string>
+            value={String(booth.guestCopyLimit)}
+            options={Array.from({ length: GUEST_COPY_LIMIT_MAX + 1 }, (_, n): [string, string] => [String(n), n === 0 ? "Off" : String(n)])}
+            onChange={(v) => setBooth({ guestCopyLimit: Number(v) }, "Copies")}
+            testPrefix="copies"
+          />
         </Row>
         <Row label="Only offer" hint="skips the picker">
           <select

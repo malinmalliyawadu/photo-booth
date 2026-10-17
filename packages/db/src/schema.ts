@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 import {
   FILTER_IDS,
+  GUEST_COPY_LIMIT_DEFAULT,
   INK_CASSETTE_PRINTS,
   PAPER_TRAY_SHEETS,
   PROP_IDS,
@@ -58,6 +59,8 @@ export const booth = pgTable(
       .$type<PropId[]>()
       .notNull()
       .default(PROP_IDS.filter((id) => id !== "none")),
+    /** Copies a guest may print of each session from the kiosk; 0 switches the button off. */
+    guestCopyLimit: integer("guest_copy_limit").notNull().default(GUEST_COPY_LIMIT_DEFAULT),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (t) => [check("booth_singleton", sql`${t.id} = 1`)],
@@ -136,6 +139,8 @@ export const sessions = pgTable(
     webPath: text("web_path"),
     thumbPath: text("thumb_path"),
     printCount: integer("print_count").notNull().default(0),
+    /** Copies guests asked for at the kiosk, counted against `booth.guestCopyLimit`; the attendant's reprints are not. */
+    guestCopies: integer("guest_copies").notNull().default(0),
     syncedAt: timestamptz("synced_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),

@@ -1,5 +1,6 @@
 export * from "./camera";
 export * from "./compositor";
+export * from "./copies";
 export * from "./faces";
 export * from "./filters";
 export * from "./gallery";

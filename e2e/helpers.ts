@@ -47,6 +47,7 @@ export async function resetBooth(request: APIRequestContext): Promise<void> {
       inkLeft: 36,
       filters: [...ALL_FILTERS],
       props: [...ALL_PROPS],
+      guestCopyLimit: 1,
     },
   });
 }

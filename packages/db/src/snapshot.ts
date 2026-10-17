@@ -1,4 +1,4 @@
-import { desc, eq, inArray, isNull, and } from "drizzle-orm";
+import { and, desc, inArray, isNull } from "drizzle-orm";
 import {
   offeredFilters,
   offeredProps,
@@ -15,7 +15,7 @@ import { db } from "./client";
 import { readBooth } from "./booth";
 import { queueCounts } from "./jobs";
 import { findActiveSession } from "./sessions";
-import { components, sessions, shots, type ComponentName, type ComponentStatus } from "./schema";
+import { components, sessions, shots, type ComponentName, type ComponentStatus, type SessionRow, type ShotRow } from "./schema";
 import { listTemplates } from "./templates";
 import { mediaUrl } from "./storage";
 
@@ -44,12 +44,14 @@ export interface Snapshot {
     filters: FilterId[];
     /** The face props the kiosk offers before posing, in the order it shows them; empty skips the step. */
     props: PropId[];
+    /** Copies a guest may print of each session from the kiosk; 0 is off. */
+    guestCopyLimit: number;
   };
   components: Record<ComponentName, { status: ComponentStatus; detail: string; seenAt: string } | undefined>;
   templates: TemplateSummary[];
   session: SessionView | null;
   recent: SessionView[];
-  queue: { pendingSync: number; failed: number };
+  queue: { pendingSync: number; pendingPrints: number; failed: number };
 }
 
 export interface TemplateSummary {
@@ -88,6 +90,8 @@ export interface SessionView {
   print: PrintStatus | null;
   reason: string | null;
   printCount: number;
+  /** Copies guests asked for at the kiosk. */
+  guestCopies: number;
   shots: ShotView[];
   compositeUrl: string | null;
   webUrl: string | null;
@@ -115,11 +119,9 @@ export interface ShotView {
 
 export const RECENT_LIMIT = 40;
 
-type ShotRow = typeof shots.$inferSelect;
-
-function shotViews(rows: ShotRow[], session: typeof sessions.$inferSelect): ShotView[] {
+function shotViews(rows: ShotRow[], session: SessionRow): ShotView[] {
   const drawn = session.webPath === null;
-  return rows
+  return [...rows]
     .sort((a, b) => a.shot - b.shot)
     .map((s) => ({
       shot: s.shot,
@@ -146,31 +148,7 @@ export async function readSnapshot(): Promise<Snapshot> {
 
   const ids = [...(active ? [active.id] : []), ...recentRows.map((r) => r.id)];
   const shotRows = ids.length ? await db.select().from(shots).where(inArray(shots.sessionId, ids)) : [];
-  const view = (row: typeof sessions.$inferSelect): SessionView => ({
-    id: row.id,
-    number: row.number,
-    templateId: row.templateId,
-    filter: row.filter,
-    prop: row.prop,
-    mirrored: row.mirrored,
-    phase: row.phase,
-    shot: row.shot,
-    shotCount: row.shotCount,
-    takenCount: row.takenCount,
-    countdownSeconds: row.countdownSeconds,
-    countdownEndsAt: row.countdownEndsAt?.toISOString() ?? null,
-    print: row.print,
-    reason: row.reason,
-    printCount: row.printCount,
-    shots: shotViews(shotRows.filter((s) => s.sessionId === row.id), row),
-    compositeUrl: mediaUrl(row.compositePath),
-    webUrl: mediaUrl(row.webPath),
-    thumbUrl: mediaUrl(row.thumbPath),
-    syncedAt: row.syncedAt?.toISOString() ?? null,
-    createdAt: row.createdAt.toISOString(),
-    finishedAt: row.finishedAt?.toISOString() ?? null,
-    deleted: row.deletedAt !== null,
-  });
+  const view = (row: SessionRow) => toView(row, shotRows.filter((s) => s.sessionId === row.id));
 
   const componentMap = {} as Snapshot["components"];
   for (const c of componentRows) {
@@ -192,6 +170,7 @@ export async function readSnapshot(): Promise<Snapshot> {
       lockedTemplateId: settings.lockedTemplateId,
       filters: offeredFilters(settings.filters),
       props: offeredProps(settings.props),
+      guestCopyLimit: settings.guestCopyLimit,
     },
     components: componentMap,
     templates: templateRows.map((t) => ({
@@ -215,11 +194,7 @@ export async function readSnapshot(): Promise<Snapshot> {
   };
 }
 
-/** The session view for one row, for the admin page's history beyond `recent`. */
-export async function readSessionView(id: string): Promise<SessionView | null> {
-  const row = await db.query.sessions.findFirst({ where: eq(sessions.id, id) });
-  if (!row) return null;
-  const shotRows = await db.select().from(shots).where(eq(shots.sessionId, id));
+function toView(row: SessionRow, shotRows: ShotRow[]): SessionView {
   return {
     id: row.id,
     number: row.number,
@@ -236,6 +211,7 @@ export async function readSessionView(id: string): Promise<SessionView | null> {
     print: row.print,
     reason: row.reason,
     printCount: row.printCount,
+    guestCopies: row.guestCopies,
     shots: shotViews(shotRows, row),
     compositeUrl: mediaUrl(row.compositePath),
     webUrl: mediaUrl(row.webPath),

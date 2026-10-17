@@ -427,7 +427,21 @@ the context. `booth.sounds` switches them off from Setup.
   or the cassette is empty, that count goes to zero, so the guests
   after it are skipped with "needs a refill" rather than each failing.
 - **Reprint** is a plain `print` job with `reprint: true`; it does not
-  touch the session's phase. **Send again** (`/api/admin/sessions/{id}/sync`)
+  touch the session's phase.
+- **Guests print copies at the kiosk.** "Print a copy" on the attract
+  screen opens the evening's prints (`GET /api/kiosk/prints`), newest
+  first; the guest finds theirs and asks for another
+  (`POST /api/sessions/{id}/copy`), which queues the same job as
+  Reprint. `copyRefusal` (`packages/core/src/copies.ts`) is the one rule,
+  run by the server and by the kiosk before it offers the button: the
+  attendant's per-session limit (`booth.guestCopyLimit`, Setup, 1 by
+  default, 0 is off) against `sessions.guestCopies`, the printer card,
+  and the cards left after the queued prints, keeping the last
+  `GUEST_COPY_RESERVE` for new guests' guestbook prints. Only finished,
+  composed, undeleted sessions from the last 24 hours are offered, so a
+  database not cleared between parties shows nobody last week's guests.
+  The attendant's Reprint ignores all of it. The picker and the prints
+  go back to the attract loop after `KIOSK_IDLE_MS` untouched. **Send again** (`/api/admin/sessions/{id}/sync`)
   is a plain `sync` job the same way.
 - **Filters are a look on the session, not on the files.** The guest
   picks one on the review screen, comparing the looks on their own

@@ -1,5 +1,5 @@
 {
-  "id": "a136a4b0-7fb0-4a7b-9914-1491f88da759",
+  "id": "b0b7db77-511c-4702-8424-e0d648f6299d",
   "prevId": "e56e5bdf-120f-43f1-8bc0-34509913efb6",
   "version": "7",
   "dialect": "postgresql",
@@ -91,12 +91,12 @@
           "notNull": true,
           "default": "'[\"colour\",\"mono\",\"vintage\",\"faded\",\"pop\"]'::jsonb"
         },
-        "props": {
-          "name": "props",
-          "type": "jsonb",
+        "guest_copy_limit": {
+          "name": "guest_copy_limit",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": "'[\"crown\",\"flowers\",\"tophat\",\"hearts\",\"specs\",\"moustache\"]'::jsonb"
+          "default": 1
         },
         "updated_at": {
           "name": "updated_at",
@@ -347,13 +347,6 @@
           "notNull": true,
           "default": "'colour'"
         },
-        "prop": {
-          "name": "prop",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'none'"
-        },
         "mirrored": {
           "name": "mirrored",
           "type": "boolean",
@@ -437,6 +430,13 @@
         },
         "print_count": {
           "name": "print_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "guest_copies": {
+          "name": "guest_copies",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -549,24 +549,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "width": {
-          "name": "width",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "height": {
-          "name": "height",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "faces": {
-          "name": "faces",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
         },
         "taken_at": {
           "name": "taken_at",

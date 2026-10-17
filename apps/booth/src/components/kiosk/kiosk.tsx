@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { needsPropChoice, type FilterId, type PropId } from "@booth/core";
+import { KIOSK_IDLE_MS, isFindable, needsPropChoice, type CopyBooth, type FilterId, type PropId } from "@booth/core";
 import type { Snapshot } from "@booth/db";
 import { post, useSnapshot } from "@/components/use-snapshot";
 import {
   AttractScreen,
   ComposingScreen,
   ConnectionBanner,
+  CopiesScreen,
   DeliverScreen,
   EndedScreen,
   LiveScreen,
@@ -18,18 +19,20 @@ import {
 } from "./screens";
 import { useFaceFinder } from "./face-finder";
 import { useSounds } from "./sounds";
+import { useIdle } from "./use-idle";
 import { useIpadCamera } from "./use-ipad-camera";
 
 /**
  * The guest-facing screen. Which screen shows is a function of the
- * snapshot; the only local state is how far the guest has got before
- * there is a session (tapped out of the attract loop, picked a layout
- * and trying props on), and the last session this screen was following,
- * so a failure can be explained before the loop comes back.
+ * snapshot; the only local state is where a guest has gone from the
+ * attract loop (the layout picker, the props for the layout they picked,
+ * or the evening's prints for a copy), and the last session this screen
+ * was following, so a failure can be explained before the loop comes
+ * back.
  */
 export function Kiosk({ initial }: { initial: Snapshot }) {
   const { snapshot, connected } = useSnapshot(initial);
-  const [picking, setPicking] = useState(false);
+  const [away, setAway] = useState<"picker" | "props" | "copies" | null>(null);
   /** The layout the guests are trying props on for, before the session starts. */
   const [trying, setTrying] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,7 +40,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   const [followed, setFollowed] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
 
-  const { session, booth, templates } = snapshot;
+  const { session, booth, templates, components, queue } = snapshot;
   // Open for as long as the booth is in iPad mode, not just while a
   // guest is posing: see useIpadCamera.
   const camera = useIpadCamera(booth.cameraMode === "ipad");
@@ -52,9 +55,11 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   // phases as a failure, explain before the attract loop comes back.
   if (session && session.id !== followed) {
     setFollowed(session.id);
-    setPicking(false);
-    setTrying(null);
+    setAway(null);
   }
+  // A guest who walks away from the picker, the props or the prints leaves the mirror for the next one.
+  const backToAttract = useCallback(() => setAway(null), []);
+  useIdle(away !== null && !session, KIOSK_IDLE_MS, backToAttract);
   const outcome = !session && followed ? snapshot.recent.find((s) => s.id === followed) : undefined;
   const ended = outcome?.phase === "failed" && dismissed !== followed ? { id: followed!, reason: outcome.reason } : null;
 
@@ -80,8 +85,10 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   // A layout picked: on to the props, or straight into the countdown.
   const pick = useCallback(
     (templateId: string) => {
-      if (askProps) setTrying(templateId);
-      else void start(templateId);
+      if (askProps) {
+        setTrying(templateId);
+        setAway("props");
+      } else void start(templateId);
     },
     [askProps, start],
   );
@@ -89,17 +96,36 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   // The attendant locked one layout: the first tap skips the picker.
   const tapToStart = useCallback(() => {
     if (booth.lockedTemplateId) pick(booth.lockedTemplateId);
-    else setPicking(true);
+    else setAway("picker");
   }, [booth.lockedTemplateId, pick]);
 
+  // Back from the props: to the picker, or past it when the layout is locked.
   const backFromProps = useCallback(() => {
-    setTrying(null);
     setError(null);
-    if (booth.lockedTemplateId) setPicking(false);
+    setAway(booth.lockedTemplateId ? null : "picker");
   }, [booth.lockedTemplateId]);
 
   const active = templates.filter((t) => t.active && (!booth.lockedTemplateId || t.id === booth.lockedTemplateId));
   const template = session ? templates.find((t) => t.id === session.templateId) : undefined;
+  const copyBooth: CopyBooth = {
+    guestCopyLimit: booth.guestCopyLimit,
+    paperLeft: booth.paperLeft,
+    inkLeft: booth.inkLeft,
+    pendingPrints: queue.pendingPrints,
+    printerDown: components.printer?.status === "error",
+  };
+  // The way in is offered once there is a print to find; the snapshot's
+  // time stands in for the clock, which a render must not read.
+  const copiesOffered =
+    booth.guestCopyLimit > 0 &&
+    snapshot.recent.some((s) =>
+      isFindable(
+        { phase: s.phase, composed: s.thumbUrl !== null, deleted: s.deleted, createdAt: s.createdAt, guestCopies: s.guestCopies },
+        new Date(snapshot.at),
+      ),
+    );
+  // Switched off, or the last print deleted, while a guest was browsing.
+  if (away === "copies" && !copiesOffered) setAway(null);
 
   let screen: React.ReactNode;
   if (booth.paused && !session) {
@@ -107,7 +133,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   } else if (ended) {
     screen = <EndedScreen reason={ended.reason} onDismiss={dismissEnded} />;
   } else if (!session || !template) {
-    const trial = askProps ? active.find((t) => t.id === trying) : undefined;
+    const trial = away === "props" && askProps ? active.find((t) => t.id === trying) : undefined;
     screen = trial ? (
       <PropsScreen
         template={trial}
@@ -120,10 +146,19 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
         onStart={(prop) => start(trial.id, prop)}
         onBack={backFromProps}
       />
-    ) : picking ? (
-      <PickerScreen templates={active} step={{ n: 1, of: steps }} busy={busy} error={error} onPick={pick} onBack={() => setPicking(false)} />
+    ) : away === "picker" ? (
+      <PickerScreen templates={active} step={{ n: 1, of: steps }} busy={busy} error={error} onPick={pick} onBack={backToAttract} />
+    ) : away === "copies" ? (
+      <CopiesScreen templates={templates} booth={copyBooth} onClose={backToAttract} />
     ) : (
-      <AttractScreen eventName={booth.eventName} recent={snapshot.recent} templates={templates} stream={camera.stream} onTap={tapToStart} />
+      <AttractScreen
+        eventName={booth.eventName}
+        recent={snapshot.recent}
+        templates={templates}
+        stream={camera.stream}
+        onTap={tapToStart}
+        onCopies={copiesOffered ? () => setAway("copies") : undefined}
+      />
     );
   } else {
     const url = (c: string) => `/api/sessions/${session.id}/${c}`;
