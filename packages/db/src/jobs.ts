@@ -107,12 +107,13 @@ export async function requeueStaleJobs(db: Db, olderThanMs = 60_000): Promise<nu
 }
 
 /** How many sync jobs are still waiting, and how many jobs gave up: the admin page's two queue numbers. */
-export async function queueCounts(db: Db): Promise<{ pendingSync: number; failed: number }> {
-  const [row] = await db.execute<{ pendingsync: string; failed: string }>(sql`
+export async function queueCounts(db: Db | Tx): Promise<{ pendingSync: number; pendingPrints: number; failed: number }> {
+  const [row] = await db.execute<{ pendingsync: string; pendingprints: string; failed: string }>(sql`
     select
       count(*) filter (where kind = 'sync' and status in ('queued', 'running')) as pendingsync,
+      count(*) filter (where kind = 'print' and status in ('queued', 'running')) as pendingprints,
       count(*) filter (where status = 'failed') as failed
     from jobs
   `).then((r) => r.rows);
-  return { pendingSync: Number(row?.pendingsync ?? 0), failed: Number(row?.failed ?? 0) };
+  return { pendingSync: Number(row?.pendingsync ?? 0), pendingPrints: Number(row?.pendingprints ?? 0), failed: Number(row?.failed ?? 0) };
 }

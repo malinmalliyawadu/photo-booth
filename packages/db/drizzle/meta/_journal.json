@@ -64,6 +64,13 @@
       "when": 1791589497215,
       "tag": "0008_kiosk_sounds",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792204601545,
+      "tag": "0009_guest_copies",
+      "breakpoints": true
     }
   ]
 }

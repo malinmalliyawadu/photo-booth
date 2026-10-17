@@ -64,6 +64,7 @@ function SessionRow({
             s.mirrored ? "mirrored" : null,
             s.print ? PRINT_LABEL[s.print].toLowerCase() : null,
             s.printCount > 1 ? `${s.printCount} prints` : null,
+            s.guestCopies > 0 ? `${s.guestCopies} ${s.guestCopies === 1 ? "copy" : "copies"} asked for at the kiosk` : null,
             s.syncedAt ? "in the gallery" : null,
           ]
             .filter(Boolean)

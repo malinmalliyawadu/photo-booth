@@ -1,5 +1,6 @@
 export * from "./camera";
 export * from "./compositor";
+export * from "./copies";
 export * from "./filters";
 export * from "./gallery";
 export * from "./ipp";

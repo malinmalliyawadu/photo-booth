@@ -126,6 +126,13 @@ export const TIMEOUTS_MS = {
   delivering: 90_000,
 } as const;
 
+/**
+ * The kiosk's own screens before a session (the layout picker, the
+ * evening's prints) go back to the attract loop after this long
+ * untouched, so a guest who walks away leaves the mirror for the next.
+ */
+export const KIOSK_IDLE_MS = 60_000;
+
 export function isActivePhase(phase: Phase): boolean {
   return ACTIVE_PHASES.includes(phase);
 }

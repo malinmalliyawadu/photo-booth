@@ -125,7 +125,11 @@ and the paper tray holds 18, so the tray needs refilling twice per
 cassette. `/admin` counts both down: tap **Tray refilled** after loading
 paper and **New ink cassette** after changing it. At zero the booth
 skips the print and the kiosk says it needs a refill; the guest's
-photos are safe and **Reprint** sends them again. The printer card
+photos are safe and **Reprint** sends them again. Guests can print
+their own copy of an earlier print from the kiosk (**Print a copy** on
+the attract screen); **Copies** on Setup sets how many each print gets,
+or switches it off, and copies stop while only a couple of cards are
+left, so they never take a new guest's guestbook print. The printer card
 says what the printer reports (out of paper, a jam, unplugged or off
 the Wi-Fi), and a print the printer refuses fails within seconds with
 that reason rather than holding up the guests behind it.
