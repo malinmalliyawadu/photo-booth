@@ -4,7 +4,7 @@ import type { Snapshot } from "@booth/db";
 
 /** The whole catalogue, as the booth offers it after a reset. */
 export const ALL_FILTERS = ["colour", "mono", "vintage", "faded", "pop"] as const;
-export const ALL_PROPS = ["crown", "flowers", "tophat", "hearts", "specs", "moustache"] as const;
+export const ALL_PROPS = ["crown", "tiara", "flowers", "halo", "tophat", "partyhat", "bunny", "hearts", "specs", "mask", "moustache", "bowtie"] as const;
 
 export async function snapshot(request: APIRequestContext): Promise<Snapshot> {
   const res = await request.get("/api/snapshot");

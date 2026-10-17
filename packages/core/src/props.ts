@@ -13,9 +13,22 @@
  */
 import type { Crop } from "./viewfinder";
 import { faceAxes, type Face } from "./faces";
-import { CROWN, FLOWERS, HEARTS, MOUSTACHE, SPECS, TOP_HAT, type Art } from "./prop-art";
+import { BOW_TIE, BUNNY_EARS, CROWN, FLOWERS, HALO, HEARTS, MASK, MOUSTACHE, PARTY_HAT, SPECS, TIARA, TOP_HAT, type Art } from "./prop-art";
 
-export type PropId = "none" | "crown" | "flowers" | "tophat" | "hearts" | "specs" | "moustache";
+export type PropId =
+  | "none"
+  | "crown"
+  | "tiara"
+  | "flowers"
+  | "halo"
+  | "tophat"
+  | "partyhat"
+  | "bunny"
+  | "hearts"
+  | "specs"
+  | "mask"
+  | "moustache"
+  | "bowtie";
 
 export interface Fit {
   /** The point on the face the prop is pinned to. */
@@ -43,11 +56,17 @@ const NOWHERE: Fit = { to: "eyes", offset: { x: 0, y: 0 }, width: 0, pin: { x: 0
 export const PROPS: readonly Prop[] = [
   { id: "none", name: "No props", art: null, fit: NOWHERE },
   { id: "crown", name: "Crown", art: CROWN, fit: { to: "eyes", offset: { x: 0, y: -0.37 }, width: 0.86, pin: { x: 0.5, y: 0.94 } } },
+  { id: "tiara", name: "Tiara", art: TIARA, fit: { to: "eyes", offset: { x: 0, y: -0.4 }, width: 0.95, pin: { x: 0.5, y: 0.9 } } },
   { id: "flowers", name: "Flowers", art: FLOWERS, fit: { to: "eyes", offset: { x: 0, y: -0.4 }, width: 1.45, pin: { x: 0.5, y: 0.6 } } },
-  { id: "tophat", name: "Top hat", art: TOP_HAT, fit: { to: "eyes", offset: { x: 0, y: -0.4 }, width: 1.15, pin: { x: 0.5, y: 0.88 } } },
+  { id: "halo", name: "Halo", art: HALO, fit: { to: "eyes", offset: { x: 0, y: -0.9 }, width: 0.9, pin: { x: 0.5, y: 0.5 } } },
+  { id: "tophat", name: "Top hat", art: TOP_HAT, fit: { to: "eyes", offset: { x: 0, y: -0.37 }, width: 1.15, pin: { x: 0.5, y: 0.88 } } },
+  { id: "partyhat", name: "Party hat", art: PARTY_HAT, fit: { to: "eyes", offset: { x: 0, y: -0.38 }, width: 0.8, pin: { x: 0.5, y: 0.9 } } },
+  { id: "bunny", name: "Bunny ears", art: BUNNY_EARS, fit: { to: "eyes", offset: { x: 0, y: -0.6 }, width: 1.5, pin: { x: 0.5, y: 0.72 } } },
   { id: "hearts", name: "Hearts", art: HEARTS, fit: { to: "eyes", offset: { x: 0, y: 0.02 }, width: 0.98, pin: { x: 0.5, y: 0.48 } } },
   { id: "specs", name: "Specs", art: SPECS, fit: { to: "eyes", offset: { x: 0, y: 0 }, width: 0.98, pin: { x: 0.5, y: 0.52 } } },
+  { id: "mask", name: "Mask", art: MASK, fit: { to: "eyes", offset: { x: 0, y: 0 }, width: 1.05, pin: { x: 0.5, y: 0.46 } } },
   { id: "moustache", name: "Moustache", art: MOUSTACHE, fit: { to: "mouth", offset: { x: 0, y: -0.1 }, width: 0.64, pin: { x: 0.5, y: 0.4 } } },
+  { id: "bowtie", name: "Bow tie", art: BOW_TIE, fit: { to: "mouth", offset: { x: 0, y: 0.5 }, width: 0.85, pin: { x: 0.5, y: 0.5 } } },
 ];
 
 /** The ids in catalogue order, typed as a non-empty tuple for schema validators. */

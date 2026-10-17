@@ -116,11 +116,11 @@ test("a prop the booth does not offer is refused, before posing and on the revie
   // Stored tidy: catalogue order, no duplicates, and "no props" is always a choice, never a setting.
   await request.patch("/api/admin/booth", { data: { props: ["tophat", "crown", "crown", "none"] } });
   expect((await snapshot(request)).booth.props).toEqual(["crown", "tophat"]);
-  expect((await request.patch("/api/admin/booth", { data: { props: ["tiara"] } })).status()).toBe(400);
+  expect((await request.patch("/api/admin/booth", { data: { props: ["fez"] } })).status()).toBe(400);
 
   const refused = await request.post("/api/sessions", { data: { templateId: layout.id, prop: "hearts" } });
   expect(refused.status()).toBe(400);
-  const unknown = await request.post("/api/sessions", { data: { templateId: layout.id, prop: "tiara" } });
+  const unknown = await request.post("/api/sessions", { data: { templateId: layout.id, prop: "fez" } });
   expect(unknown.status()).toBe(400);
 
   const started = await request.post("/api/sessions", { data: { templateId: layout.id, prop: "tophat" } });

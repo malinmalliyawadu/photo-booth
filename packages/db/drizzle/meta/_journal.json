@@ -78,6 +78,13 @@
       "when": 1792208533906,
       "tag": "0010_face_props",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792209786482,
+      "tag": "0011_more_props",
+      "breakpoints": true
     }
   ]
 }

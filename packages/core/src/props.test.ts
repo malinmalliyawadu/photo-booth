@@ -59,15 +59,15 @@ describe("the catalogue", () => {
 
   it("recognises its ids and nothing else", () => {
     expect(isPropId("crown")).toBe(true);
-    expect(isPropId("tiara")).toBe(false);
+    expect(isPropId("fez")).toBe(false);
     expect(isPropId(null)).toBe(false);
-    expect(() => propById("tiara" as never)).toThrow(/Unknown prop/);
+    expect(() => propById("fez" as never)).toThrow(/Unknown prop/);
   });
 });
 
 describe("what the booth offers", () => {
   it("keeps known props, in catalogue order, never no props", () => {
-    expect(offeredProps(["moustache", "crown", "crown", "tiara", "none", 3])).toEqual(["crown", "moustache"]);
+    expect(offeredProps(["moustache", "crown", "crown", "fez", "none", 3])).toEqual(["crown", "moustache"]);
     expect(offeredProps([])).toEqual([]);
   });
 

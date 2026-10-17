@@ -87,7 +87,8 @@ into the print and the gallery photo. Choose which filters to offer on
 ## Props
 
 With the iPad camera, guests try on props after picking a layout: a
-crown, flowers, a top hat, heart glasses, gold specs or a moustache,
+crown, a tiara, flowers, a halo, a top hat, a party hat, bunny ears,
+heart glasses, gold specs, a masquerade mask, a moustache or a bow tie,
 worn by every face in the viewfinder, live. They pose in them and can
 change them on the review screen; the print and the gallery photo have
 them drawn in the same places. The photos on disk stay as the camera
