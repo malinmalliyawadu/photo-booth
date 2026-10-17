@@ -1,6 +1,6 @@
 # Photo booth
 
-Tap the iPad, pick a layout, try on props, pose, pick a filter, print, scan. Runs on a
+Tap the iPad, pick a layout, take a pose idea, try on props, pose, pick a filter, print, scan. Runs on a
 mini PC or a Mac at the venue, or on Coolify; the photos go to the
 event's own site, where guests' phone photos land too.
 
@@ -19,7 +19,7 @@ pnpm dev                      # https://localhost:3100 + the worker
 Your browser will warn about the certificate until you trust
 `ops/certs/ca.crt`. The kiosk is `/`, the attendant's page is `/admin`
 (Live: status, supplies and pause; Sessions: reprint, send again,
-delete; Setup: event, camera, countdown, sounds, looks and layouts),
+delete; Setup: event, camera, countdown, sounds, pose ideas, looks and layouts),
 the TV is `/slideshow`.
 
 ```bash
@@ -95,6 +95,17 @@ them drawn in the same places. The photos on disk stay as the camera
 took them. Choose which props to offer under Setup on `/admin`; with
 none on, the step is skipped. The face detector (MediaPipe) runs on the
 iPad from files the booth serves, so it needs no internet.
+
+## Pose ideas
+
+For guests who freeze when the countdown starts: after the layout, the
+kiosk offers an idea for each photo ("Big smiles", "Back to back",
+"Jump!"), each with a little stick-figure picture, climbing from a
+classic to a wild one, with "Other ideas" to draw again. With the iPad camera the ideas suit however many people are
+in the frame. Guests who take them get each idea on the screen while
+that photo counts down, with two extra seconds to read it; guests who
+know what to do start without. Switch the step off under Setup on
+`/admin`.
 
 ## The gallery
 

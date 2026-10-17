@@ -20,6 +20,7 @@ export function LiveCamera({
   finder,
   prop,
   look,
+  onPeople,
 }: {
   stream: MediaStream | null;
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -29,12 +30,18 @@ export function LiveCamera({
   finder: FaceFinder | null;
   prop: PropId;
   look: string;
+  /** Told how many faces are in the frame, for a screen that plans for them; the faces are tracked for it even with no props on. */
+  onPeople?: (count: number) => void;
 }) {
-  const tracked = useTrackedFaces(finder, videoRef, prop !== "none" && stream !== null);
+  const tracked = useTrackedFaces(finder, videoRef, (prop !== "none" || onPeople !== undefined) && stream !== null);
+  const people = tracked.length;
+  useEffect(() => {
+    onPeople?.(people);
+  }, [onPeople, people]);
   return (
     <div className="relative h-full w-full" style={{ filter: look, transform: MIRROR_TRANSFORM }} data-testid="viewfinder-look">
       <LiveVideo stream={stream} videoRef={videoRef} onFrame={onFrame} />
-      {frame && tracked.length > 0 && (
+      {frame && prop !== "none" && tracked.length > 0 && (
         <PropLayer faces={tracked.map((t) => t.face)} keys={tracked.map((t) => t.id)} prop={prop} frame={frame} />
       )}
     </div>

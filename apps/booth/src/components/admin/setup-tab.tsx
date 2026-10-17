@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { Lock, Trash2, Upload, Volume2, VolumeX } from "lucide-react";
+import { Lock, Sparkles, Trash2, Upload, Volume2, VolumeX } from "lucide-react";
 import { FILTERS, GUEST_COPY_LIMIT_MAX, PROPS, cssFilter, propImageUrl, type CameraMode, type FilterId, type PropId } from "@booth/core";
 import type { TemplateRow } from "@booth/db";
 import { Composite, samplePhotos } from "@/components/composite";
@@ -11,7 +11,7 @@ import { patch } from "@/components/use-snapshot";
 import { Row, Section, Segmented, Stepper } from "./controls";
 import { useAdmin } from "./shell";
 
-/** Set once for the evening: the event, the camera, the countdown, the copies, the layouts, and the looks and props on offer. */
+/** Set once for the evening: the event, the camera, the countdown, the sounds, the pose ideas, the copies, the layouts, and the looks and props on offer. */
 export function SetupTab() {
   const { snapshot, setBooth, run, notify } = useAdmin();
   const { booth, templates } = snapshot;
@@ -47,6 +47,20 @@ export function SetupTab() {
             <span className="switch" aria-checked={booth.sounds} aria-hidden />
             {booth.sounds ? <Volume2 className="h-4 w-4 text-ivory-faint" /> : <VolumeX className="h-4 w-4 text-ivory-faint" />}
             {booth.sounds ? "On" : "Off"}
+          </button>
+        </Row>
+        <Row label="Pose ideas" hint="a step before posing">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={booth.poseIdeas}
+            onClick={() => setBooth({ poseIdeas: !booth.poseIdeas }, "Pose ideas")}
+            className="flex items-center gap-3 justify-self-start text-sm font-semibold"
+            data-testid="pose-ideas"
+          >
+            <span className="switch" aria-checked={booth.poseIdeas} aria-hidden />
+            <Sparkles className="h-4 w-4 text-ivory-faint" />
+            {booth.poseIdeas ? "Offered" : "Off"}
           </button>
         </Row>
         <Row label="Copies" hint="per print, at the kiosk">

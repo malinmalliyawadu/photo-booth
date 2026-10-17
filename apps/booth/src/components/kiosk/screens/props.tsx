@@ -1,16 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Camera, X } from "lucide-react";
-import { propById, propChoices, type PropId, type Size } from "@booth/core";
+import { propById, propChoices, type PropId } from "@booth/core";
 import type { TemplateSummary } from "@booth/db";
 import { Grain, Spotlight } from "@/components/chrome";
+import { CameraPreview } from "../camera-preview";
 import { PropSwatch, PropTile } from "../choice";
 import type { FaceFinder } from "../face-finder";
-import { LiveCamera } from "../live-camera";
 import type { IpadCamera } from "../use-ipad-camera";
-import { Viewfinder } from "../viewfinder";
-import { IPAD_FRAME } from "./live";
 
 /**
  * Before posing: the guests try the props on, live, in the viewfinder
@@ -44,8 +42,6 @@ export function PropsScreen({
   const choices = propChoices(offered);
   // The first prop on, so the guests see what this is the moment they arrive.
   const [prop, setProp] = useState<PropId>(choices[1] ?? choices[0]!);
-  const video = useRef<HTMLVideoElement>(null);
-  const [frame, setFrame] = useState<Size | null>(null);
   return (
     <div className="relative flex h-dvh flex-col overflow-hidden px-12 pt-safe-8 pb-safe-8" data-testid="props" data-prop={prop}>
       <Spotlight />
@@ -69,9 +65,7 @@ export function PropsScreen({
 
       <div className="relative my-6 grid min-h-0 flex-1 grid-cols-[1.4fr_1fr] gap-10">
         <div className="min-h-0 animate-rise overflow-hidden rounded-2xl shadow-[0_30px_60px_-30px_rgba(0,0,0,0.9)]">
-          <Viewfinder frame={frame ?? IPAD_FRAME} slots={template.slots} shot={1}>
-            <LiveCamera stream={camera.stream} videoRef={video} frame={frame} onFrame={setFrame} finder={finder} prop={prop} look="none" />
-          </Viewfinder>
+          <CameraPreview cameraMode="ipad" camera={camera} finder={finder} slots={template.slots} shot={1} prop={prop} look="none" />
         </div>
         <div className="card flex min-h-0 animate-rise flex-col p-3" style={{ animationDelay: "120ms" }}>
           <p className="px-3 pt-2 pb-3 text-lg text-ivory-soft">Everyone in the photo wears them. You can change them after.</p>

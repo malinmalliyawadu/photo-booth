@@ -3,6 +3,7 @@ import {
   ACTIVE_PHASES,
   DEFAULT_PROP,
   beginSession,
+  countdownWith,
   defaultFilter,
   newShortId,
   offeredFilters,
@@ -11,6 +12,7 @@ import {
   transition,
   type Face,
   type FilterId,
+  type PoseId,
   type PropId,
   type SessionEvent,
   type SessionState,
@@ -75,14 +77,21 @@ export async function findActiveSession(dbOrTx: Db | Tx): Promise<SessionRow | n
 }
 
 /**
- * A guest tapped a layout, and the props they picked to pose in when
- * the booth offers any. Refused while paused, while another session is
- * active, or for a layout or props that are not offered - all things a
- * second finger on the iPad, or an attendant changing Setup, can cause.
- * The photos start in the booth's default look; the guest picks another
- * on the review screen.
+ * A guest tapped a layout, picked the props to pose in when the booth
+ * offers any, and took the pose ideas it planned for them if they wanted
+ * some (one per shot, which the kiosk shows while counting down, with
+ * time to read them). Refused while paused, while another session is
+ * active, or for a layout, props or ideas that are not offered - all
+ * things a second finger on the iPad, or an attendant changing Setup,
+ * can cause. The photos start in the booth's default look; the guest
+ * picks another on the review screen.
  */
-export async function startSession(templateId: string, prop: PropId = DEFAULT_PROP, now = new Date()): Promise<SessionRow> {
+export async function startSession(
+  templateId: string,
+  prop: PropId = DEFAULT_PROP,
+  poses: PoseId[] | null = null,
+  now = new Date(),
+): Promise<SessionRow> {
   return db.transaction(async (tx) => {
     // Serialise starts: two taps must not both find "no active session".
     await tx.execute(sql`select pg_advisory_xact_lock(1)`);
@@ -96,13 +105,17 @@ export async function startSession(templateId: string, prop: PropId = DEFAULT_PR
     if (prop !== DEFAULT_PROP && !offeredProps(settings.props).includes(prop)) {
       throw new SessionError("Those props are not offered right now", 400);
     }
+    if (poses && !settings.poseIdeas) throw new SessionError("Pose ideas are not offered right now", 400);
+    if (poses && poses.length !== template.shotCount) {
+      throw new SessionError(`That layout takes ${template.shotCount} photos, not ${poses.length}`, 400);
+    }
     const active = await findActiveSession(tx);
     if (active) throw new SessionError("Another session is in progress");
 
     const { state, effects } = beginSession(
       {
         shotCount: template.shotCount,
-        countdownSeconds: settings.countdownSeconds,
+        countdownSeconds: countdownWith(settings.countdownSeconds, poses !== null),
         filter: defaultFilter(offeredFilters(settings.filters)),
         prop,
       },
@@ -114,6 +127,7 @@ export async function startSession(templateId: string, prop: PropId = DEFAULT_PR
       .values({
         id,
         templateId,
+        poses,
         shotCount: state.shotCount,
         countdownSeconds: state.countdownSeconds,
         ...stateToColumns(state),

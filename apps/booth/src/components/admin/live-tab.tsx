@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera, Cpu, Droplet, Layers, Pause, Play, Printer, UploadCloud } from "lucide-react";
-import { INK_LOW, PAPER_LOW } from "@booth/core";
+import { INK_LOW, PAPER_LOW, poseById } from "@booth/core";
 import type { ComponentName, SessionView, TemplateSummary } from "@booth/db";
 import { Composite, sessionPhotos } from "@/components/composite";
 import { PHASE_LABEL, PRINT_LABEL, sessionNumber, timeAgo } from "@/lib/format";
@@ -86,6 +86,8 @@ export function LiveTab() {
 
 function ActiveSession({ session, templates }: { session: SessionView; templates: TemplateSummary[] }) {
   const template = templates.find((t) => t.id === session.templateId);
+  const posing = session.phase === "countdown" || session.phase === "capturing";
+  const pose = posing && session.poses ? poseById(session.poses[session.shot - 1] ?? session.poses[0]!) : null;
   return (
     <div className="flex items-center gap-4 rounded-xl bg-gold-tint/50 p-3 ring-1 ring-gold/30" data-testid={`session-${session.id}`}>
       {template && session.shots.length > 0 ? (
@@ -99,7 +101,8 @@ function ActiveSession({ session, templates }: { session: SessionView; templates
         <p className="display text-2xl text-gold">{sessionNumber(session.number)}</p>
         <p className="text-sm text-ivory">
           {PHASE_LABEL[session.phase]}
-          {session.phase === "countdown" || session.phase === "capturing" ? `, photo ${session.shot} of ${session.shotCount}` : ""}
+          {posing ? `, photo ${session.shot} of ${session.shotCount}` : ""}
+          {pose ? ` · ${pose.title}` : ""}
         </p>
         <p className="text-xs text-ivory-faint">
           {template?.name ?? "Unknown layout"}

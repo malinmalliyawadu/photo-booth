@@ -1,6 +1,7 @@
 export { AttractScreen } from "./attract";
 export { CopiesScreen } from "./copies";
 export { PickerScreen } from "./picker";
+export { PosesScreen } from "./poses";
 export { PropsScreen } from "./props";
 export { LiveScreen } from "./live";
 export { ReviewScreen } from "./review";

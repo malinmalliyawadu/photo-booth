@@ -56,8 +56,7 @@ export function AttractScreen({
 
         <div className="relative flex animate-rise items-end justify-between gap-10 px-14 pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
           <div className="min-w-0">
-            <p className="eyebrow">Photo booth</p>
-            <h1 className="display-italic mt-3 max-w-[11ch] text-[clamp(4.5rem,9.5vw,8.5rem)] text-ivory">{eventName}</h1>
+            <h1 className="display-italic max-w-[11ch] text-[clamp(4.5rem,9.5vw,8.5rem)] text-ivory">{eventName}</h1>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-5 pb-2">
             <p className="eyebrow eyebrow-dim">Tap anywhere</p>

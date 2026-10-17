@@ -10,7 +10,7 @@ export async function readBooth(db: Db | Tx): Promise<BoothRow> {
 }
 
 export type BoothPatch = Partial<
-  Pick<BoothRow, "eventName" | "paused" | "cameraMode" | "countdownSeconds" | "sounds" | "paperLeft" | "paperTraySize" | "inkLeft" | "inkCassetteSize" | "lockedTemplateId" | "filters" | "props" | "guestCopyLimit">
+  Pick<BoothRow, "eventName" | "paused" | "cameraMode" | "countdownSeconds" | "sounds" | "paperLeft" | "paperTraySize" | "inkLeft" | "inkCassetteSize" | "lockedTemplateId" | "filters" | "props" | "guestCopyLimit" | "poseIdeas">
 >;
 
 export async function updateBooth(patch: BoothPatch): Promise<BoothRow> {
