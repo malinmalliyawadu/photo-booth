@@ -71,6 +71,13 @@
       "when": 1792204601545,
       "tag": "0009_guest_copies",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792208533906,
+      "tag": "0010_face_props",
+      "breakpoints": true
     }
   ]
 }

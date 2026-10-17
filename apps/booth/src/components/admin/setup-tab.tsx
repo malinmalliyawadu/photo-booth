@@ -4,14 +4,14 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Lock, Trash2, Upload, Volume2, VolumeX } from "lucide-react";
-import { FILTERS, GUEST_COPY_LIMIT_MAX, cssFilter, type CameraMode, type FilterId } from "@booth/core";
+import { FILTERS, GUEST_COPY_LIMIT_MAX, PROPS, cssFilter, propImageUrl, type CameraMode, type FilterId, type PropId } from "@booth/core";
 import type { TemplateRow } from "@booth/db";
 import { Composite, samplePhotos } from "@/components/composite";
 import { patch } from "@/components/use-snapshot";
 import { Row, Section, Segmented, Stepper } from "./controls";
 import { useAdmin } from "./shell";
 
-/** Set once for the evening: the event, the camera, the countdown, the copies, the layouts and the looks on offer. */
+/** Set once for the evening: the event, the camera, the countdown, the copies, the layouts, and the looks and props on offer. */
 export function SetupTab() {
   const { snapshot, setBooth, run, notify } = useAdmin();
   const { booth, templates } = snapshot;
@@ -79,6 +79,14 @@ export function SetupTab() {
       <Section title="Looks" eyebrow="On the review screen">
         <p className="text-xs text-ivory-soft">What a guest can pick for their photos. Offer one and nothing is asked.</p>
         <FilterToggles offered={booth.filters} onChange={(filters) => setBooth({ filters }, "Filters")} />
+      </Section>
+
+      <Section title="Props" eyebrow="Before posing">
+        <p className="text-xs text-ivory-soft">
+          What the guests can wear, live while they pose and on the print. Switch them all off and nothing is asked. The iPad camera
+          finds the faces; with another camera there are no props.
+        </p>
+        <PropToggles offered={booth.props} onChange={(props) => setBooth({ props }, "Props")} />
       </Section>
 
       <Section title="Layouts" eyebrow="In the picker">
@@ -184,6 +192,34 @@ function FilterToggles({ offered, onChange }: { offered: FilterId[]; onChange: (
                 onChange={(e) => onChange(e.target.checked ? [...offered, f.id] : offered.filter((id) => id !== f.id))}
                 className="h-5 w-5 accent-gold disabled:opacity-40"
                 data-testid={`filter-on-${f.id}`}
+              />
+            </label>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** One switch per prop in the catalogue, each with its artwork. Any can be off, all of them included. */
+function PropToggles({ offered, onChange }: { offered: PropId[]; onChange: (props: PropId[]) => void }) {
+  return (
+    <ul className="mt-3 grid grid-cols-1 gap-2 min-[480px]:grid-cols-2" data-testid="props">
+      {PROPS.filter((p) => p.id !== "none").map((p) => {
+        const on = offered.includes(p.id);
+        return (
+          <li key={p.id}>
+            <label className={`flex items-center gap-3 rounded-xl p-2 ring-1 ${on ? "bg-velvet ring-gold/40" : "bg-velvet ring-velvet-edge"}`}>
+              <span className="flex h-10 w-14 shrink-0 items-center justify-center rounded-sm bg-velvet-lifted p-1">
+                <img src={propImageUrl(p.id)!} alt="" className="max-h-full max-w-full" />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{p.name}</span>
+              <input
+                type="checkbox"
+                checked={on}
+                onChange={(e) => onChange(e.target.checked ? [...offered, p.id] : offered.filter((id) => id !== p.id))}
+                className="h-5 w-5 accent-gold"
+                data-testid={`prop-on-${p.id}`}
               />
             </label>
           </li>

@@ -43,6 +43,9 @@ test.describe("with the camera allowed", () => {
     const layout = s.templates.find((t) => t.active && t.shotCount === 4)!;
     await page.getByTestId("attract").click();
     await page.getByTestId(`layout-${layout.id}`).click();
+    // The props come next; the mock camera shows nobody to wear them.
+    await page.getByTestId("prop-none").click();
+    await page.getByTestId("start").click();
     await expect(page.getByTestId("live")).toBeVisible();
 
     // What the guest sees is the slot's shape, not the camera's.
@@ -71,6 +74,7 @@ test.describe("with the camera allowed", () => {
     const layout = s.templates.find((t) => t.active && t.shotCount === 1)!;
     await page.getByTestId("attract").click();
     await page.getByTestId(`layout-${layout.id}`).click();
+    await page.getByTestId("start").click();
     await expect(page.getByTestId("review")).toBeVisible({ timeout: 15_000 });
     const first = (await snapshot(request)).session!.shots[0]!.url;
     await expect(page.getByTestId("review").locator(`img[src="${first}"]`).first()).toBeVisible();
@@ -105,6 +109,7 @@ test("a blocked camera fails the session quickly and says why", async ({ page, r
   const layout = s.templates.find((t) => t.active && t.shotCount === 1)!;
   await page.getByTestId("attract").click();
   await page.getByTestId(`layout-${layout.id}`).click();
+  await page.getByTestId("start").click();
   await expect(page.getByTestId("camera-error")).toBeVisible();
 
   // Three attempts, each reported as soon as it fails rather than after

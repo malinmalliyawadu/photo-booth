@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { planSync, printBlocker, type Camera, type CameraMode, type Phase } from "@booth/core";
 import {
   applySessionEvent,
@@ -56,7 +57,10 @@ const capture: Handler = async (job, services) => {
     await ensureDir(sessionPaths.dir(id));
     const rel = sessionPaths.shot(id, shot);
     await camera.shoot(resolveData(rel));
-    const result = await recordShot(id, shot, rel);
+    // Nobody looks for faces in a frame the worker took: the props are
+    // drawn from what the iPad finds while it takes the photo.
+    const { width, height } = await uprightSize(resolveData(rel));
+    const result = await recordShot(id, shot, rel, { width, height, faces: null });
     if (!result.ok) services.log(`session ${id} shot ${shot}: ${result.reason}`);
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
@@ -64,6 +68,12 @@ const capture: Handler = async (job, services) => {
     await applySessionEvent(id, { type: "shot_failed", shot, reason });
   }
 };
+
+/** A photo's size the way up it is drawn, EXIF orientation applied. */
+async function uprightSize(absPath: string): Promise<{ width: number; height: number }> {
+  const { autoOrient } = await sharp(absPath).metadata();
+  return autoOrient;
+}
 
 const timeout: Handler = async (job) => {
   await applySessionEvent(sessionOf(job), {

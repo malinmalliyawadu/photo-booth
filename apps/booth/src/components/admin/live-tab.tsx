@@ -89,7 +89,7 @@ function ActiveSession({ session, templates }: { session: SessionView; templates
   return (
     <div className="flex items-center gap-4 rounded-xl bg-gold-tint/50 p-3 ring-1 ring-gold/30" data-testid={`session-${session.id}`}>
       {template && session.shots.length > 0 ? (
-        <Composite template={template} photos={sessionPhotos(session.shots)} composed={session.thumbUrl} filter={session.filter} mirrored={session.mirrored} className="w-24 shrink-0 rounded-sm" />
+        <Composite template={template} photos={sessionPhotos(session.shots)} composed={session.thumbUrl} filter={session.filter} prop={session.prop} mirrored={session.mirrored} className="w-24 shrink-0 rounded-sm" />
       ) : (
         <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-sm bg-velvet text-ivory-faint">
           <Camera className="h-5 w-5" />

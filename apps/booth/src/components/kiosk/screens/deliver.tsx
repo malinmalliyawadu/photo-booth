@@ -47,6 +47,7 @@ export function DeliverScreen({
             photos={sessionPhotos(session.shots)}
             composed={session.webUrl}
             filter={session.filter}
+            prop={session.prop}
             mirrored={session.mirrored}
             fit
             mat

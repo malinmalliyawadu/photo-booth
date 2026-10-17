@@ -12,15 +12,17 @@
  *   countdown ─(countdown_elapsed)─▶ capturing ─(shot_taken)─▶ countdown (next shot)
  *                                        │                 └─▶ review (last shot)
  *                                        └─(shot_failed)─▶ countdown (retry) | failed
- *   review ─(filter_chosen | mirror_chosen)─▶ review
+ *   review ─(filter_chosen | prop_chosen | mirror_chosen)─▶ review
  *          ├─(retake)─▶ countdown (shot 1)
  *          └─(accepted | timed_out)─▶ composing ─(composed)─▶ delivering ─(finished | timed_out)─▶ done
  *                                               └─(compose_failed | timed_out)─▶ failed
  *
  * The review comes before the compositor because the review is where
- * the guest picks the look and the mirror: the browser draws the photos
- * under the layout with each choice as it is made, and the print and
- * web JPEGs are made once, from what was accepted.
+ * the guest settles the look, the props and the mirror: the browser
+ * draws the photos under the layout with each choice as it is made, and
+ * the print and web JPEGs are made once, from what was accepted. The
+ * props are first picked before posing (the session starts with them,
+ * so the guests see them live), and may be changed on the review.
  *
  * Timing events (`countdown_elapsed`, `timed_out`) carry the phase and
  * shot they were armed for and are ignored when the session has moved
@@ -29,6 +31,7 @@
  */
 
 import { DEFAULT_FILTER, type FilterId } from "./filters";
+import { DEFAULT_PROP, type PropId } from "./props";
 
 export type Phase =
   | "countdown"
@@ -62,6 +65,8 @@ export interface SessionState {
   reason: string | null;
   /** The look on the photos, chosen on the review screen; the camera's colours until then. */
   filter: FilterId;
+  /** What every face in the photos wears: picked before posing, changeable on the review screen. */
+  prop: PropId;
   /** The photos drawn flipped, the way the mirror showed the guest; chosen on the review screen. */
   mirrored: boolean;
 }
@@ -75,6 +80,7 @@ export type SessionEvent =
   | { type: "accepted" }
   | { type: "retake" }
   | { type: "filter_chosen"; filter: FilterId }
+  | { type: "prop_chosen"; prop: PropId }
   | { type: "mirror_chosen"; mirrored: boolean }
   | { type: "print_started" }
   | { type: "printed" }
@@ -138,7 +144,7 @@ export function isActivePhase(phase: Phase): boolean {
 }
 
 export function beginSession(
-  input: { shotCount: number; countdownSeconds: number; filter?: FilterId },
+  input: { shotCount: number; countdownSeconds: number; filter?: FilterId; prop?: PropId },
   now: Date,
 ): { state: SessionState; effects: Effect[] } {
   if (!Number.isInteger(input.shotCount) || input.shotCount < 1) {
@@ -155,6 +161,7 @@ export function beginSession(
     print: null,
     reason: null,
     filter: input.filter ?? DEFAULT_FILTER,
+    prop: input.prop ?? DEFAULT_PROP,
     mirrored: false,
   };
   return armCountdown(state, 1, now);
@@ -208,12 +215,18 @@ export function transition(state: SessionState, event: SessionEvent, now: Date):
       return armCountdownTransition({ ...state, takenCount: 0, attempts: 0 }, 1, now);
     }
 
-    // The guest compares the looks on the review screen, and flips the
-    // photos to match the mirror they posed in. Once accepted the photos
-    // are put together with what was chosen, so no more changes.
+    // The guest compares the looks and the props on the review screen,
+    // and flips the photos to match the mirror they posed in. Once
+    // accepted the photos are put together with what was chosen, so no
+    // more changes.
     case "filter_chosen": {
       if (state.phase !== "review") return refuse(`filter chosen in ${describe(state)}`);
       return ok({ ...state, filter: event.filter }, []);
+    }
+
+    case "prop_chosen": {
+      if (state.phase !== "review") return refuse(`props chosen in ${describe(state)}`);
+      return ok({ ...state, prop: event.prop }, []);
     }
 
     case "mirror_chosen": {

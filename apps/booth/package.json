@@ -3,17 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm --silent certs && next dev -p \"${PORT:-3100}\" --experimental-https --experimental-https-key ../../ops/certs/booth.key --experimental-https-cert ../../ops/certs/booth.crt --experimental-https-ca ../../ops/certs/ca.crt",
+    "dev": "pnpm --silent certs && pnpm --silent mediapipe && next dev -p \"${PORT:-3100}\" --experimental-https --experimental-https-key ../../ops/certs/booth.key --experimental-https-cert ../../ops/certs/booth.crt --experimental-https-ca ../../ops/certs/ca.crt",
     "certs": "test -f ../../ops/certs/booth.crt || ../../ops/ca.sh",
-    "build": "next build",
+    "build": "pnpm --silent mediapipe && next build",
+    "mediapipe": "node scripts/mediapipe.mjs",
     "start": "next start -H 127.0.0.1 -p 3100",
     "typecheck": "next typegen && tsc -p tsconfig.json",
     "lint": "eslint",
-    "dev:http": "next dev -p \"${PORT:-3100}\""
+    "dev:http": "pnpm --silent mediapipe && next dev -p \"${PORT:-3100}\""
   },
   "dependencies": {
     "@booth/core": "workspace:*",
     "@booth/db": "workspace:*",
+    "@mediapipe/tasks-vision": "1.1.1",
     "lucide-react": "^1.30.0",
     "next": "16.3.0",
     "pg": "^8.22.0",

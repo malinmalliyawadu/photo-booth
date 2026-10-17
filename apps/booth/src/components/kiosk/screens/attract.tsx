@@ -120,7 +120,7 @@ function Wall({ prints, templates }: { prints: SessionView[]; templates: Templat
             className="h-[30dvh] shrink-0"
             style={{ width: `calc(30dvh * ${t.width / t.height})`, transform: `rotate(${i % 2 ? 1.6 : -1.2}deg)` }}
           >
-            <Composite template={t} photos={sessionPhotos(s.shots)} composed={s.webUrl} filter={s.filter} mirrored={s.mirrored} mat />
+            <Composite template={t} photos={sessionPhotos(s.shots)} composed={s.webUrl} filter={s.filter} prop={s.prop} mirrored={s.mirrored} mat />
           </div>
         );
       })}
